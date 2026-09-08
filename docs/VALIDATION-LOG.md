@@ -107,3 +107,22 @@ runner holds a blob data role.
   naming the policy, initiative, and assignment; compliant retry succeeded (Lab 3)
 - Cosmos serverless + 3 containers + WORM immutability policy + all identity wiring (Lab 4)
 - Zip deploy with remote build to the consumption Function App (Lab 4)
+
+## Lab 5 / Lab 6 validation (same session, continued)
+
+- Reporting stage deployed; POA&M (xlsx+json) and SAR (md) generated via HTTP triggers
+  and landed on dated paths in the WORM container. Empty-store runs are clean, not errors.
+- OPA gate validated both directions with conftest 0.6x: clean foundation plan passed
+  4/4; a deliberately bad plan (public blob + shared keys) failed with named rules.
+- **Lab 6 design finding:** the foundation deny policy blocks the sabotage itself —
+  you cannot flip a storage account public while deny stands (deny fires on updates).
+  The lab now teaches deliberate de-escalation (Deny → Audit via parameter = a reviewed
+  one-line PR), sabotage, remediation, re-escalation.
+- Full loop executed on-account: de-escalated, flipped the seed account public,
+  `az policy state trigger-scan` (~15 min), compliance flagged **NonCompliant**,
+  remediation task created manually (the dry-run approval), task **Succeeded (1/0)**,
+  `allowBlobPublicAccess` back to `false` — fixed by the remediation identity, not a
+  human command — then deny re-escalated.
+- Remediation caveat: `az policy remediation create` needs the assignment's **full
+  resource ID** (management-group-scoped assignments aren't found by name from a
+  subscription context).
