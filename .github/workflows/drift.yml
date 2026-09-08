@@ -1,0 +1,66 @@
+name: drift-detection
+
+# Detector 1 of 2: does reality still match the code? (Detector 2 is the KQL tripwire —
+# who's been touching reality? — scheduled in Log Analytics.)
+# terraform plan -detailed-exitcode: 0 = clean, 2 = drift. Drift opens an issue with the diff.
+
+on:
+  schedule:
+    - cron: "0 8 * * *"   # nightly, after the 05:00 UTC collection sweep
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+
+env:
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_state_storage_account: ${{ vars.STATE_STORAGE_ACCOUNT }}
+  TF_VAR_owner_email: ${{ vars.OWNER_EMAIL }}
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stage: [01-foundation, 03-evidence-store, 04-reporting, 06-enforcement]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: plan with detailed exit code
+        id: plan
+        working-directory: stages/${{ matrix.stage }}
+        continue-on-error: true
+        run: |
+          terraform init -input=false -backend-config=../../labs/03-foundation/backend.hcl
+          terraform plan -input=false -detailed-exitcode -no-color -out=drift.plan \
+            2>&1 | tee plan-output.txt
+          echo "exitcode=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: open drift issue
+        if: steps.plan.outputs.exitcode == '2'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('stages/${{ matrix.stage }}/plan-output.txt', 'utf8');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Drift detected: stages/${{ matrix.stage }} (${new Date().toISOString().slice(0,10)})`,
+              body: 'Reality no longer matches code. This is a change-management finding that generated itself.\n\n```\n' + body.slice(0, 60000) + '\n```',
+              labels: ['drift'],
+            });

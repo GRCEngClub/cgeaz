@@ -1,0 +1,52 @@
+name: compliance-gate
+
+# The pipeline enforces policy on your environment. This gate enforces policy on the
+# pipeline. No governance change merges without passing the same kind of scrutiny the
+# pipeline applies to everything else.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  id-token: write   # OIDC federation — no client secret stored in GitHub, nothing to rotate
+  contents: read
+
+env:
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_state_storage_account: ${{ vars.STATE_STORAGE_ACCOUNT }}
+  TF_VAR_owner_email: ${{ vars.OWNER_EMAIL }}
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        stage: [01-foundation, 03-evidence-store, 04-reporting, 06-enforcement]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: terraform validate + plan
+        working-directory: stages/${{ matrix.stage }}
+        run: |
+          terraform init -input=false -backend-config=../../labs/03-foundation/backend.hcl
+          terraform validate
+          terraform plan -input=false -out=tf.plan
+          terraform show -json tf.plan > plan.json
+
+      - name: OPA gate (conftest)
+        uses: instrumenta/conftest-action@master
+        with:
+          files: stages/${{ matrix.stage }}/plan.json
+          policy: policy

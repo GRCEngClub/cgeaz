@@ -1,0 +1,21 @@
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+plan.json
+crash.log
+
+# Backend config is machine-generated per learner (bootstrap.sh)
+labs/03-foundation/backend.hcl
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Local scratch
+*.zip
+.DS_Store
+lab1-evidence.json
