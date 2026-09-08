@@ -104,3 +104,12 @@ with lab-scale ingestion). Teardown scripts exist in every lab folder; the cours
 teardown is `terraform destroy` per stage, in reverse order (06 → 04 → 03 → 01).
 
 You're ready. Start with `labs/01-sandbox`.
+
+## Appendix: CI identity (course-team setup, not learner setup)
+
+The gate and drift workflows authenticate via OIDC federation — app registration
+`github-cgeaz-pipeline`, federated for `repo:GRCEngClub/cgeaz:pull_request` and
+`:ref:refs/heads/main`. It holds Contributor at `mg-grc` (plan/refresh needs list-keys
+and config-read actions that Reader lacks; Contributor cannot write RBAC) plus
+Storage Blob Data Contributor on the state RG. Hardening this to a plan-only custom
+role is a worthwhile production exercise — and a good community PR.
