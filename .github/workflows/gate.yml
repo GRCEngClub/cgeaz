@@ -22,6 +22,12 @@ env:
 
 jobs:
   gate:
+    # Runs only in forks that have been armed (Lab 6: labs/06-loop/arm-your-fork.sh).
+    # The upstream GRCEngClub/cgeaz repo is deliberately NOT armed: on a public repo,
+    # a pull_request OIDC subject matches PRs from any fork — arming upstream would
+    # hand fork PRs a path toward the course subscription. Your fork, your identity,
+    # your sandbox subscription only.
+    if: ${{ vars.AZURE_CLIENT_ID != '' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:

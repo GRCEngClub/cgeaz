@@ -30,12 +30,27 @@ Read what dry-run means in `main.tf`: the modify policy deploys, but the assignm
 `DoNotEnforce` — compliance data accumulates, and **you** create the remediation task.
 That task is the human approval gate.
 
-### 2. Arm the CI gate on your fork
+### 2. Arm the CI gate — on YOUR fork, never upstream
 
-Enable the `compliance-gate` and `drift-detection` workflows in your fork's Actions tab,
-then add branch protection on `main` requiring the gate. Test it: open a PR adding a
-public storage account to any stage — conftest fails, naming the rule and the resource.
-Close it unmerged. (Local test: `conftest test <plan.json> -p policy/`.)
+```bash
+./arm-your-fork.sh <your-github-username>
+```
+
+The script creates an OIDC app federated to **your fork**, grants it the plan roles,
+and prints five repository **Variables** to add in your fork's UI (Settings → Secrets
+and variables → Actions → Variables). They're variables, not secrets, because OIDC
+stores no credential — the IDs grant nothing without the federation match.
+
+Read the script's header before running it: it explains why the upstream repo is
+deliberately unarmed (on a public repo, `pull_request` OIDC subjects match PRs from
+any fork, and the PR can modify the workflow it runs — a trust boundary you should be
+able to explain by the end of this course, because it's the same reasoning you'll
+apply to every CI system you ever assess).
+
+Then enable both workflows in your fork's Actions tab, add branch protection on `main`
+requiring the gate, and test it: open a PR adding a public storage account to any
+stage — conftest fails, naming the rule and the resource. Close it unmerged.
+(Local test: `conftest test <plan.json> -p policy/`.)
 
 ### 3. De-escalate, then sabotage
 

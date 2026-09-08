@@ -105,11 +105,14 @@ teardown is `terraform destroy` per stage, in reverse order (06 → 04 → 03 �
 
 You're ready. Start with `labs/01-sandbox`.
 
-## Appendix: CI identity (course-team setup, not learner setup)
+## Appendix: how the CI workflows get credentials
 
-The gate and drift workflows authenticate via OIDC federation — app registration
-`github-cgeaz-pipeline`, federated for `repo:GRCEngClub/cgeaz:pull_request` and
-`:ref:refs/heads/main`. It holds Contributor at `mg-grc` (plan/refresh needs list-keys
-and config-read actions that Reader lacks; Contributor cannot write RBAC) plus
-Storage Blob Data Contributor on the state RG. Hardening this to a plan-only custom
-role is a worthwhile production exercise — and a good community PR.
+They don't — not in this repo. The upstream repo is **deliberately unarmed**: its
+workflows skip until `AZURE_CLIENT_ID` is set, and it never will be here, because on
+a public repo the `pull_request` OIDC subject matches PRs from any fork. Each learner
+arms **their own fork** against **their own sandbox subscription** in Lab 6 with
+`labs/06-loop/arm-your-fork.sh`, which creates a fork-scoped OIDC federation and
+prints the five repository variables to add. No secrets exist anywhere in this design:
+OIDC exchanges short-lived tokens against a federation that names your fork alone.
+Hardening the granted role (Contributor → a plan-only custom role) is a worthwhile
+production exercise — and a good community PR.
