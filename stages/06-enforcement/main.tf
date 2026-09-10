@@ -30,8 +30,8 @@ data "terraform_remote_state" "foundation" {
 }
 
 locals {
-  mg_id          = data.terraform_remote_state.foundation.outputs.management_group_id
-  remediation_id = data.terraform_remote_state.foundation.outputs.remediation_identity_id
+  mg_id           = data.terraform_remote_state.foundation.outputs.management_group_id
+  remediation_id  = data.terraform_remote_state.foundation.outputs.remediation_identity_id
   remediation_pid = data.terraform_remote_state.foundation.outputs.remediation_identity_principal_id
 
   # The escalation ladder, wired to one variable. Each step up is a reviewed PR:

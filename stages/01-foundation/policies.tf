@@ -12,7 +12,7 @@ resource "azurerm_policy_definition" "require_env_tag" {
 
   parameters = jsonencode({
     effect = {
-      type = "String"
+      type          = "String"
       allowedValues = ["Audit", "Deny", "Disabled"]
       defaultValue  = "Audit"
     }
@@ -40,7 +40,7 @@ resource "azurerm_policy_definition" "deny_public_blob" {
 
   parameters = jsonencode({
     effect = {
-      type = "String"
+      type          = "String"
       allowedValues = ["Audit", "Deny", "Disabled"]
       defaultValue  = "Deny"
     }

@@ -5,14 +5,14 @@
 # Internal plumbing storage for the Functions runtime (NOT the evidence store —
 # that account has shared keys disabled; this one is the app's own scratch space).
 resource "azurerm_storage_account" "func_internal" {
-  name                     = "stgrcfunc${random_string.suffix.result}"
-  resource_group_name      = local.evidence_rg
-  location                 = var.functions_location
-  account_tier             = "Standard"
-  account_replication_type = "LRS"
-  min_tls_version          = "TLS1_2"
+  name                            = "stgrcfunc${random_string.suffix.result}"
+  resource_group_name             = local.evidence_rg
+  location                        = var.functions_location
+  account_tier                    = "Standard"
+  account_replication_type        = "LRS"
+  min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
-  tags                     = local.common_tags
+  tags                            = local.common_tags
 }
 
 resource "azurerm_service_plan" "collectors" {

@@ -1,6 +1,6 @@
 locals {
-  evidence_rg   = data.terraform_remote_state.foundation.outputs.evidence_resource_group_name
-  subscription  = data.terraform_remote_state.foundation.outputs.subscription_id
+  evidence_rg  = data.terraform_remote_state.foundation.outputs.evidence_resource_group_name
+  subscription = data.terraform_remote_state.foundation.outputs.subscription_id
   common_tags = {
     env     = var.environment
     purpose = "grc-evidence-plane"
@@ -49,29 +49,29 @@ resource "azurerm_cosmosdb_sql_database" "grc" {
 
 # assessments: one document per finding per run. Partitioned by subscription+date query pattern.
 resource "azurerm_cosmosdb_sql_container" "assessments" {
-  name                  = "assessments"
-  resource_group_name   = local.evidence_rg
-  account_name          = azurerm_cosmosdb_account.evidence.name
-  database_name         = azurerm_cosmosdb_sql_database.grc.name
-  partition_key_paths   = ["/subscriptionId"]
+  name                = "assessments"
+  resource_group_name = local.evidence_rg
+  account_name        = azurerm_cosmosdb_account.evidence.name
+  database_name       = azurerm_cosmosdb_sql_database.grc.name
+  partition_key_paths = ["/subscriptionId"]
 }
 
 # frameworks: CSF 2.0 / 800-53 catalogs as records we own.
 resource "azurerm_cosmosdb_sql_container" "frameworks" {
-  name                  = "frameworks"
-  resource_group_name   = local.evidence_rg
-  account_name          = azurerm_cosmosdb_account.evidence.name
-  database_name         = azurerm_cosmosdb_sql_database.grc.name
-  partition_key_paths   = ["/frameworkId"]
+  name                = "frameworks"
+  resource_group_name = local.evidence_rg
+  account_name        = azurerm_cosmosdb_account.evidence.name
+  database_name       = azurerm_cosmosdb_sql_database.grc.name
+  partition_key_paths = ["/frameworkId"]
 }
 
 # mappings: the crosswalk — which assessment satisfies which control in which framework.
 resource "azurerm_cosmosdb_sql_container" "mappings" {
-  name                  = "mappings"
-  resource_group_name   = local.evidence_rg
-  account_name          = azurerm_cosmosdb_account.evidence.name
-  database_name         = azurerm_cosmosdb_sql_database.grc.name
-  partition_key_paths   = ["/frameworkId"]
+  name                = "mappings"
+  resource_group_name = local.evidence_rg
+  account_name        = azurerm_cosmosdb_account.evidence.name
+  database_name       = azurerm_cosmosdb_sql_database.grc.name
+  partition_key_paths = ["/frameworkId"]
 }
 
 # --- Evidence artifact storage: WORM reports container, zero shared keys. ---

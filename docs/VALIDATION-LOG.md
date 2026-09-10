@@ -126,3 +126,34 @@ runner holds a blob data role.
 - Remediation caveat: `az policy remediation create` needs the assignment's **full
   resource ID** (management-group-scoped assignments aren't found by name from a
   subscription context).
+
+
+## Stage 02-activation validation (2026-09-10, same account)
+
+Built and validated after the guides shipped — three findings, all now encoded in
+`stages/02-activation`:
+
+### F12 — azurerm has no data source for Defender pricing
+Discovery reads current plan tiers via the `azapi` provider
+(`data azapi_resource` on `Microsoft.Security/pricings@2024-01-01`). azapi is the
+standing pattern for anything azurerm can't yet interrogate.
+
+### F13 — keying activation resources on live tiers destroys what you just enabled
+First design used `for_each = activation_needed` (plans whose tier != Standard).
+After apply, the data source reads Standard, the key disappears, and the NEXT plan
+proposes destroying the pricing resource (flipping it back to Free). Fix: resources
+iterate the full baseline map; the gap map stays as an inventory OUTPUT only.
+
+### F14 — omitting `subplan` forces replacement every run
+Azure stamps a default subplan on enablement (`DefenderForStorageV2`, `PerKeyVault`).
+With no `subplan` in config the provider plans `-/+ replace` forever. Fix: the
+baseline is a map plan → subplan, pinned.
+
+### F15 — plans already at Standard must be imported
+azurerm refuses to create a pricing resource whose live tier is not Free:
+`already exists - to be managed via Terraform this resource needs to be imported`.
+Lab 4 step 1 imports the Lab 2 storage plan (and the CSF assignment) — the same
+adopt-don't-recreate muscle Lab 3 teaches.
+
+Validated end state: import + apply, then `terraform plan` → `No changes.`;
+`current_plan_tiers` output shows StorageAccounts/KeyVaults at Standard.

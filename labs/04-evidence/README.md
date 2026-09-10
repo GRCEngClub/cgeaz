@@ -41,7 +41,43 @@
 
 ## Steps
 
-### 1. Deploy the evidence store
+### 1. Deploy the activation stage (stages/02-activation)
+
+**where:** `cgeaz/stages/02-activation`
+
+Stage 2 puts your Defender baseline and the CSF 2.0 standard under code. Discovery
+(azapi data sources reading `Microsoft.Security/pricings`) reports every baseline
+plan's current tier; the `activation_needed` output is your gap inventory.
+
+```bash
+cd ../../stages/02-activation
+terraform init -backend-config=../../labs/03-foundation/backend.hcl
+```
+
+Adopt what you enabled by hand in Lab 2 — both the Defender for Storage plan and the
+CSF assignment. azurerm refuses to create a pricing resource that is already Standard
+(validated: `already exists - to be managed via Terraform this resource needs to be
+imported`), and recreating a live policy assignment is never the move:
+
+```bash
+SUB=/subscriptions/$ARM_SUBSCRIPTION_ID
+terraform import 'azurerm_security_center_subscription_pricing.baseline["StorageAccounts"]' \
+  $SUB/providers/Microsoft.Security/pricings/StorageAccounts
+terraform import azurerm_subscription_policy_assignment.nist_csf_20 \
+  $SUB/providers/Microsoft.Authorization/policyAssignments/nist-csf-20
+terraform plan
+terraform apply
+```
+
+**Success signal:** the plan proposes ONLY the plans you never enabled (in the
+validated run: KeyVaults created, StorageAccounts untouched after import), the apply
+completes, and a second `terraform plan` says `No changes.` — the convergence test.
+
+> **Read `terraform output` before moving on.** `current_plan_tiers` +
+> `activation_needed` are a live plan-coverage inventory, the first artifact every
+> assessment asks for, generated as a byproduct.
+
+### 2. Deploy the evidence store
 
 **where:** `cgeaz/labs/04-evidence`, then the `cd` takes you to `cgeaz/stages/03-evidence-store`
 
@@ -70,7 +106,7 @@ minutes is normal; that's the longest single wait in the lab.
 > the account showed `Succeeded` in `az resource list` while actually `Failed` —
 > check `provisioningState` **on the resource itself**, not the deployment list.
 
-### 2. Deploy the collector code
+### 3. Deploy the collector code
 
 **where:** `cgeaz/functions/collect_assessments`
 
@@ -101,7 +137,7 @@ anything else.
 > use, zip the *contents* of the function directory (host.json at the archive root),
 > not the directory itself.
 
-### 3. Seed the frameworks container
+### 4. Seed the frameworks container
 
 **where:** `cgeaz/labs/04-evidence`
 
@@ -123,7 +159,7 @@ granted it). If it fails with an auth error, the stage's Cosmos role grant may s
 be propagating; like the Lab 3 state-storage 403, waiting a couple of minutes and
 retrying beats changing anything.
 
-### 4. Trigger a collection run
+### 5. Trigger a collection run
 
 **where:** `cgeaz/labs/04-evidence`
 
@@ -145,14 +181,14 @@ run <uuid>: <N> documents at <ISO timestamp>
 > broken. Come back tomorrow, hit the same URL, and the count goes positive. The
 > nightly timer (05:00 UTC) will also do it for you.
 
-### 5. The trace (the point of everything)
+### 6. The trace (the point of everything)
 
 Pick one unhealthy assessment in the Defender portal, note its assessment ID, then find
 the same finding in Cosmos Data Explorer (portal → your Cosmos account → Data Explorer
 → `grc` → `assessments`) — same ID, same status, plus `collectedAt`, `runId`, and the
 full resource path. Portal: a live view. Your store: owned history.
 
-### 6. Prove WORM
+### 7. Prove WORM
 
 **where:** `cgeaz/labs/04-evidence`
 
