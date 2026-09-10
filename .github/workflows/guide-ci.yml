@@ -1,0 +1,60 @@
+name: guide-ci
+
+# The lab guides are part of the product, so they are tested like the product.
+# Two jobs, two failure modes learned the hard way on CGE-P:
+#
+#   guides       (PRs)     — every fenced ```bash / ```hcl / ```terraform block in the
+#                            guides must parse, and every relative link must resolve.
+#                            A guide command a learner cannot paste-and-run is a defect.
+#   parse-canary (nightly) — `terraform validate` across stages/* with -backend=false.
+#                            No cloud credentials, no state: this only catches the CLI
+#                            or provider drifting out from under the committed code
+#                            before a learner does.
+
+on:
+  pull_request:
+    paths:
+      - "labs/**"
+      - "docs/**"
+      - "README.md"
+      - ".github/workflows/guide-ci.yml"
+  schedule:
+    - cron: "0 7 * * *" # nightly, an hour before drift-detection
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  guides:
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: validate guide code blocks and links
+        run: ./labs/00-setup/ci/extract-and-validate.sh
+
+  parse-canary:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stage: [01-foundation, 03-evidence-store, 04-reporting, 06-enforcement]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: terraform validate (no backend, no credentials)
+        working-directory: stages/${{ matrix.stage }}
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
