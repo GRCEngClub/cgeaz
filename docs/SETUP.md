@@ -103,6 +103,29 @@ pennies (Cosmos serverless, consumption Functions, one Log Analytics workspace a
 with lab-scale ingestion). Teardown scripts exist in every lab folder; the course-end
 teardown is `terraform destroy` per stage, in reverse order (06 → 04 → 03 → 01).
 
+## 7. Windows / Git Bash notes
+
+The labs are written for a POSIX shell. On Windows, Git Bash covers almost everything,
+with three things to know up front (each lab repeats the note where it bites):
+
+1. **Path mangling on resource IDs.** Git Bash rewrites arguments that start with `/`
+   into Windows paths, which corrupts Azure resource IDs (`--scope /subscriptions/...`,
+   `terraform import /providers/...`). Disable it for your session before Lab 1:
+
+   ```bash
+   export MSYS_NO_PATHCONV=1
+   ```
+
+2. **No `zip` command.** Labs 4 and 5 zip the function code. Git Bash does not ship
+   `zip`; use 7-Zip (`7z a /tmp/collector.zip .`) or run those two steps from WSL.
+   Either way, zip the directory *contents* so `host.json` sits at the archive root.
+
+3. **`date` is GNU.** The budget script's `date -d "+2 years"` fallback works in
+   Git Bash as-is; nothing to change.
+
+WSL (Ubuntu) needs none of the above and matches the validated environment most
+closely; if you already have it, prefer it.
+
 You're ready. Start with `labs/01-sandbox`.
 
 ## Appendix: how the CI workflows get credentials
