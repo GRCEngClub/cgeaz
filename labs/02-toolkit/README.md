@@ -93,21 +93,49 @@ uses `az rest` against the diagnostic-settings API (`2021-05-01-preview`) direct
 
 **Timing fact (this bit us in validation):** routing only captures events **after**
 it exists. Our Lab 1 role assignment never appeared in the workspace, because it
-predates the diagnostic setting. And ingestion lags ~5–10 minutes even for new events.
-So: make a fresh change (re-run the budget script, add a tag to the resource group),
-wait a few minutes, then prove your audit trail in the workspace's query editor
-(portal → Log Analytics workspace → Logs):
+predates the diagnostic setting. Ingestion then lags a few minutes for new events —
+and on a **brand-new workspace the first rows can take 30–60 minutes to appear at
+all** (same "the first cycle is slow" behavior as Defender in Step 4). In validation,
+a confirmed, correctly-captured tag write was still absent from the table 20 minutes
+later. **Empty means wait, not broken.**
 
-```kusto
-AzureActivity
-| summarize n=count() by OperationNameValue
-| order by n desc
+So: make a fresh change (re-run the budget script, or add a tag to the resource
+group), then prove your audit trail with the query below.
+
+```bash
+az group update --name rg-grc-sandbox-dev --set tags.lastcheck=$(date +%s)
 ```
 
+**This query is KQL, not a shell command — run it in one of these two places:**
+
+- **Portal (native KQL editor).** portal → **Log Analytics workspaces** →
+  **law-grc-sandbox** → **Logs**. Not the subscription-level *Activity Log* blade —
+  that's a different viewer with no query editor. If Logs opens in **Simple mode**
+  (a table picker, no text box), flip the top-right toggle to **KQL mode**. Paste the
+  query as-is, set the time range to Last 24 hours, and Run:
+
+  ```kusto
+  AzureActivity
+  | summarize n=count() by OperationNameValue
+  | order by n desc
+  ```
+
+- **Terminal (stay in the shell).** Pasting the raw multi-line KQL above into bash/zsh
+  fails with `parse error near '|'` — the shell tries to interpret the pipes. Wrap the
+  same query in quotes and run it through the CLI instead:
+
+  ```bash
+  WS=$(az monitor log-analytics workspace show --workspace-name law-grc-sandbox \
+    --resource-group rg-grc-sandbox-dev --query customerId -o tsv)
+  az monitor log-analytics query --workspace "$WS" \
+    --analytics-query "AzureActivity | summarize n=count() by OperationNameValue | order by n desc" -o table
+  ```
+
 **Success signal:** rows appear, and the operations are the ones you just performed
-(budget write, tag write). If the table is empty, it is almost certainly the two
-delays above, not a broken setup. Make another change, wait 10 minutes, re-run the
-query. Don't rebuild anything.
+(budget write, tag write). If the table is empty, it is almost certainly the two delays
+above — routing postdating your earlier actions, and first-ingestion lag — not a broken
+setup. On a fresh workspace give it up to ~30–60 minutes, make another change, and
+re-run the query. Don't rebuild anything.
 
 Your own actions, logged, routed, queryable. That loop — act, record, route, query,
 prove — is the fundamental motion of the whole pipeline.
