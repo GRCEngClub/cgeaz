@@ -72,9 +72,15 @@ az role assignment create --assignee-object-id $GROUP_ID \
   --assignee-principal-type Group --role Reader --scope $RG_ID
 ```
 
-**Success signal:** the final command returns JSON whose `roleDefinitionName` is
-`Reader` and whose `scope` ends in `/resourceGroups/rg-grc-sandbox-dev` — group scope,
-not subscription scope. That distinction is the whole point of the step.
+**Success signal:** the final command's JSON shows `principalType: Group` and a `scope`
+ending in `/resourceGroups/rg-grc-sandbox-dev` — group scope, not subscription scope.
+That distinction is the whole point of the step.
+
+The role itself appears only as `roleDefinitionId`, **not** as `roleDefinitionName`, on
+the `create` output. The value ends in `acdd72a7-3385-48ef-bd42-f606fba81ae7` — the fixed
+ID of the built-in **Reader** role, identical in every Azure tenant. To confirm the
+friendly name "Reader," use the read-back command below (or `az role assignment list`),
+which resolves `roleDefinitionName`; the `create` call does not.
 
 > **Windows / Git Bash:** Git Bash rewrites arguments that start with `/` into Windows
 > paths, which mangles Azure resource IDs like the `--scope` value here. Prefix the
@@ -108,6 +114,10 @@ provided script, which calls the budgets API directly via `az rest`:
 
 **where:** `cgeaz/labs/01-sandbox`
 
+Replace `you@example.com` with your real email — this address is where **both** budget
+alerts (80% actual and 100% forecast) are delivered. Leave the placeholder in and your
+alerts go to a mailbox you don't own, so you'll never hear about a runaway.
+
 ```bash
 ./create-budget.sh you@example.com
 ```
@@ -129,7 +139,7 @@ credit. Defense in depth applies to your wallet too.
 
 ## Verify
 
-- [ ] `az account management-group show --name mg-grc --expand` shows the tree
+- [ ] `az account management-group show --name mg-grc --expand --recurse` shows the full tree down to your subscription. (`--expand` alone stops at `mg-grc-sandbox` and won't display the subscription; `--recurse` is required to see all three levels and confirm the silent `subscription add` from step 1 worked.)
 - [ ] Resource group exists with all three tags (`az group show --name rg-grc-sandbox-dev --query tags`)
 - [ ] `az role assignment list --resource-group rg-grc-sandbox-dev` shows Reader / grc-auditors / RG scope
 - [ ] `lab1-evidence.json` saved locally
