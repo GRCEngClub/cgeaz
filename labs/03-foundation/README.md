@@ -134,7 +134,8 @@ management-group policy set resource replaced the deprecated one.
 
 ```bash
 az storage account create --name stgrcdenytest$RANDOM --resource-group rg-grc-sandbox-dev \
-  --location eastus --sku Standard_LRS --allow-blob-public-access true
+  --location eastus --sku Standard_LRS --allow-blob-public-access true \
+  2>&1 | tee lab3-deny-evidence.txt
 ```
 
 **Expected output:** the command FAILS, and the failure is the deliverable:
@@ -143,9 +144,11 @@ az storage account create --name stgrcdenytest$RANDOM --resource-group rg-grc-sa
 RequestDisallowedByPolicy
 ```
 
-Read the full error: it names the policy, the initiative, and the assignment, and the
-resource was never created. Save the error JSON — it's a preventive-control evidence
-artifact.
+Read the full error: it names the policy, the initiative, and the assignment (the
+`Policy identifiers` block), and the resource was never created. The `tee` above saved
+the full text to `lab3-deny-evidence.txt` — that file is your preventive-control
+evidence artifact. (The CLI prints a text error, not clean JSON; the raw text with the
+policy identifiers is the artifact.)
 
 > **If the create unexpectedly SUCCEEDS:** you likely ran it within moments of the
 > apply. Validated: enforcement was live within ~2 minutes of assignment. Delete the

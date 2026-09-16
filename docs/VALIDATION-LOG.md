@@ -157,3 +157,41 @@ adopt-don't-recreate muscle Lab 3 teaches.
 
 Validated end state: import + apply, then `terraform plan` → `No changes.`;
 `current_plan_tiers` output shows StorageAccounts/KeyVaults at Standard.
+
+### F16 — `az role assignment create` output has no `roleDefinitionName`
+
+Found in the non-author runthrough (Abdie, 9/14, PR #1). The create call returns only
+`roleDefinitionId` (Reader = `...acdd72a7-3385-48ef-bd42-f606fba81ae7`, same GUID in
+every tenant); the friendly name appears only on `az role assignment list`. Related:
+`az account management-group show --expand` stops one level down — `--recurse` is
+required to see the subscription and confirm the silent `subscription add`. Lab 1's
+success signals now match the real output.
+
+### F17 — first Log Analytics ingestion takes 30–60 minutes on a new workspace
+
+Found in the non-author runthrough (PR #2). A confirmed, correctly-routed tag write was
+still absent from `AzureActivity` 20 minutes later; first rows on a brand-new workspace
+can take 30–60 minutes (same first-cycle behavior as Defender). Also: the KQL block
+reads like a shell command — pasting it into zsh throws `parse error near '|'`, and the
+portal's Logs blade often opens in Simple mode with no query box. Lab 2 now gives both
+paths explicitly (portal KQL mode, or `az monitor log-analytics query`).
+
+### F18 — partial `terraform import` failures surface in dependency order
+
+Found in the non-author runthrough (PR #3). If some of Lab 3's four imports don't land,
+later applies fail with `already exists ... needs to be imported` for the independent
+resources first and the dependents only after those are fixed — whack-a-mole. The guide
+now says: `terraform state list` first, re-import everything missing in one pass. Also
+fixed: the Verify item "Committed and pushed" was impossible in Labs 1–3 (nothing edits
+a tracked file until Lab 4).
+
+### F19 — azurerm 4.x deprecations and copy-paste placeholders
+
+Found in the non-author runthrough (PR #4). Stage 03 moved to the forward-compatible
+attribute names (`local_authentication_enabled = false`; container `.id` for the
+immutability policy) — verified `terraform plan` = No changes against the live
+validation environment on the locked azurerm 4.81.0, so it is a pure rename. The
+runnable `TF_VAR_state_storage_account=stgrctfstateXXXXXXXX` placeholder lines in Labs
+4 and 5 now derive the value from `backend.hcl` (copied verbatim, the placeholder
+produced a cryptic `no such host`). macOS/Homebrew Python needs a venv for the seed
+script (PEP 668 `externally-managed-environment`) — noted in Lab 4.

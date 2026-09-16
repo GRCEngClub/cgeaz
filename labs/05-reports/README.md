@@ -17,7 +17,7 @@
 ```bash
 cd ../../stages/04-reporting
 terraform init -backend-config=../../labs/03-foundation/backend.hcl
-export TF_VAR_state_storage_account=stgrctfstateXXXXXXXX   # your value from backend.hcl
+export TF_VAR_state_storage_account=$(grep storage_account_name ../../labs/03-foundation/backend.hcl | cut -d'"' -f2)   # read from backend.hcl, no manual substitution
 terraform plan   # read the reporter identity's whitelist: Cosmos READ + Blob WRITE.
                  # No Security Reader, no Cosmos write — SoD enforced by scopes.
 terraform apply

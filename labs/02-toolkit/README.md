@@ -131,6 +131,9 @@ az group update --name rg-grc-sandbox-dev --set tags.lastcheck=$(date +%s)
     --analytics-query "AzureActivity | summarize n=count() by OperationNameValue | order by n desc" -o table
   ```
 
+  The first run may prompt to install the `log-analytics` CLI extension — say yes
+  (one-time, per machine).
+
 **Success signal:** rows appear, and the operations are the ones you just performed
 (budget write, tag write). If the table is empty, it is almost certainly the two delays
 above — routing postdating your earlier actions, and first-ingestion lag — not a broken
