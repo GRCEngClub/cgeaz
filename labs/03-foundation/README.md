@@ -68,6 +68,11 @@ terraform init -backend-config=../../labs/03-foundation/backend.hcl
 > until it completes. Do not add yourself more roles, and do not recreate the storage
 > account; time is the only fix.
 
+> **If a command hangs on `Acquiring state lock…` and never returns**, a previous
+> `terraform` run was interrupted and left a lock on the state blob. Take the lock ID
+> from the error and run `terraform force-unlock <ID>`, or break the blob lease on the
+> state file (`az storage blob lease break`). Only do this when no other run is active.
+
 **Success signal:** `Terraform has been successfully initialized!`
 
 Now adopt what Labs 1 and 2 built by hand:
@@ -84,6 +89,19 @@ terraform import azurerm_log_analytics_workspace.grc $SUB/resourceGroups/rg-grc-
 
 > **Windows / Git Bash:** every import ID starts with `/` and Git Bash will mangle it.
 > `export MSYS_NO_PATHCONV=1` first (see Lab 1).
+
+> **All four imports must land before you apply.** If a later `terraform apply` fails
+> with `... already exists - to be managed via Terraform this resource needs to be
+> imported into the State`, one or more imports didn't take (an interrupted run, a
+> skipped line). These errors surface in **dependency order** — Terraform reports the
+> independent resources first, and the dependents (`mg-grc-sandbox` needs `mg-grc`; the
+> workspace needs the resource group) only after those are fixed — so reacting to them
+> one at a time feels like whack-a-mole. Instead, list what is actually in state and
+> re-import everything still missing in a single pass:
+>
+> ```bash
+> terraform state list   # compare against the four resources imported above
+> ```
 
 **Success signal:** each import ends with Terraform reporting the import succeeded.
 Then run `terraform plan` and read it. The goal for the imported resources is **no
@@ -142,7 +160,7 @@ pair is the complete story: safe path permitted, unsafe path blocked.
 - [ ] Portal: initiative assigned at mg-grc-sandbox, inheriting to the subscription
 - [ ] `terraform plan` → No changes
 - [ ] The deny fired; the compliant retry succeeded; test account cleaned up
-- [ ] Committed and pushed — from here on: **changes go through the repo, never the portal**
+- [ ] Understand the workflow shift: from here on, all infrastructure changes go through the repo, never the portal. You start committing and pushing your own code in Lab 4 — Labs 1–3 only import and apply the provided starter, so there is nothing new to commit yet.
 
 ## Teardown
 
