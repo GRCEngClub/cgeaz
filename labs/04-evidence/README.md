@@ -84,7 +84,7 @@ completes, and a second `terraform plan` says `No changes.` — the convergence 
 ```bash
 cd ../../stages/03-evidence-store
 terraform init -backend-config=../../labs/03-foundation/backend.hcl
-export TF_VAR_state_storage_account=stgrctfstateXXXXXXXX   # your value from backend.hcl
+export TF_VAR_state_storage_account=$(grep storage_account_name ../../labs/03-foundation/backend.hcl | cut -d'"' -f2)   # read from backend.hcl, no manual substitution
 terraform plan   # count the custody chain: Cosmos + 3 containers, WORM container,
                  # keyless storage, collector app, two scoped role grants
 terraform apply  # Cosmos takes a few minutes — read the collector code while you wait
@@ -147,6 +147,20 @@ pip install azure-cosmos azure-identity
 COSMOS_ENDPOINT=$(cd ../../stages/03-evidence-store && terraform output -raw cosmos_endpoint) \
   python3 seed_frameworks.py
 ```
+
+> **macOS / Homebrew:** a bare `pip` may not exist (Homebrew ships only `pip3`), and
+> Homebrew Python blocks system-wide installs (PEP 668, `externally-managed-environment`),
+> so `pip install ...` above fails with `ModuleNotFoundError: No module named 'azure'` or
+> `externally-managed-environment`. Use a virtual environment:
+>
+> ```bash
+> python3 -m venv ~/cge-venv
+> source ~/cge-venv/bin/activate
+> pip install azure-cosmos azure-identity
+> ```
+>
+> Then run the seed with the venv active. Inside the venv, `pip` and `python3` are the
+> same interpreter and PEP 668 does not apply — identical on macOS, Linux, and WSL.
 
 **Expected output:**
 

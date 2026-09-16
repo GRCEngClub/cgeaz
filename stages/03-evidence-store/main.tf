@@ -23,7 +23,9 @@ resource "azurerm_cosmosdb_account" "evidence" {
   kind                = "GlobalDocumentDB"
 
   # Identity-only access: no key-based auth against the evidence database.
-  local_authentication_disabled = true
+  # local_authentication_disabled was deprecated in favour of local_authentication_enabled
+  # (removed in azurerm v5.0); the boolean inverts, so disabled=true becomes enabled=false.
+  local_authentication_enabled = false
 
   capabilities {
     name = "EnableServerless"
@@ -102,7 +104,9 @@ resource "azurerm_storage_container" "reports" {
 
 # WORM: write once, read many. Not access control — a platform guarantee.
 resource "azurerm_storage_container_immutability_policy" "reports_worm" {
-  storage_container_resource_manager_id = azurerm_storage_container.reports.resource_manager_id
+  # resource_manager_id was deprecated on azurerm_storage_container; id now returns the
+  # resource-manager ID this argument expects.
+  storage_container_resource_manager_id = azurerm_storage_container.reports.id
   immutability_period_in_days           = var.reports_retention_days
   # Unlocked for the course so teardown works. Production locks it — after which
   # nobody, including Microsoft, can shorten or remove it.
