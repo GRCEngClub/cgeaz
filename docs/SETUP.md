@@ -124,6 +124,11 @@ teardown is `terraform destroy` per stage, in reverse order (06 → 04 → 03 �
 
 ## 7. Windows / Git Bash notes
 
+> Setting up a Windows machine from scratch (Azure CLI, Terraform, Python,
+> conftest, PowerShell-native provider registration)? Follow
+> **[SETUP-WINDOWS.md](SETUP-WINDOWS.md)** — a launch-day learner contribution —
+> then come back here for the Git Bash quirks below.
+
 The labs are written for a POSIX shell. On Windows, Git Bash covers almost everything,
 with three things to know up front (each lab repeats the note where it bites):
 
@@ -146,6 +151,41 @@ WSL (Ubuntu) needs none of the above and matches the validated environment most
 closely; if you already have it, prefer it.
 
 You're ready. Start with `labs/01-sandbox`.
+
+## 8. Linux notes — rolling-release distros (Kali, Arch, etc.)
+
+Two real failure modes from a launch-day learner on Kali (thank you, Lee), both
+Python packaging problems rather than Azure ones:
+
+1. **`az` breaks with `ModuleNotFoundError: No module named
+   'azure.mgmt.resource...'`** — a system-wide `pip install` clobbered a
+   dependency the apt-installed CLI needed (the `azure` namespace package is
+   shared across ~300 azure-mgmt-* packages, so whichever install wins,
+   everyone gets). Don't reconcile versions in system site-packages; give the
+   CLI its own venv:
+
+   ```bash
+   python3 -m venv ~/.local/share/az-cli-venv
+   ~/.local/share/az-cli-venv/bin/pip install --upgrade pip
+   ~/.local/share/az-cli-venv/bin/pip install "azure-cli==2.90.0"
+   ln -sf ~/.local/share/az-cli-venv/bin/az ~/.local/bin/az
+   ```
+
+   (Avoid `pipx install azure-cli` — it has resolved to an ancient release and
+   its launcher shells out to the system `python`, reintroducing the conflict.)
+
+2. **The venv later breaks with `No module named 'azure'`** — rolling-release
+   distros repoint `/usr/bin/python3` on ordinary upgrades, and a venv's
+   `bin/python3` is a symlink to that movable target, so its site-packages
+   directory stops matching the interpreter version. Pin the venv to the exact
+   interpreter it was built with:
+
+   ```bash
+   ln -sf /usr/bin/python3.13 ~/.local/share/az-cli-venv/bin/python3
+   ```
+
+   On fixed-release distros (Debian stable, Ubuntu LTS) this doesn't happen —
+   the default python3 doesn't move between releases.
 
 ## Appendix: how the CI workflows get credentials
 
