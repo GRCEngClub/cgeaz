@@ -1,0 +1,34 @@
+name: unit-tests
+
+# The functions are the pipeline's evidence path, so they are tested like the pipeline
+# tests everything else. No cloud credentials: every Azure dependency is faked.
+
+on:
+  pull_request:
+    paths:
+      - "functions/**"
+      - "tests/**"
+      - ".github/workflows/tests.yml"
+  schedule:
+    - cron: "30 7 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  functions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Same interpreter the Function App runs.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: install
+        run: pip install -r functions/collect_assessments/requirements.txt pytest
+
+      - name: pytest
+        run: pytest tests -q
