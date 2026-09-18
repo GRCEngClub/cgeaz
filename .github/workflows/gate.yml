@@ -30,6 +30,8 @@ jobs:
     if: ${{ vars.AZURE_CLIENT_ID != '' }}
     runs-on: ubuntu-latest
     strategy:
+      # Each stage gets its own verdict; one failing stage must not cancel the others.
+      fail-fast: false
       matrix:
         stage: [01-foundation, 03-evidence-store, 04-reporting, 06-enforcement]
     steps:
@@ -58,11 +60,18 @@ jobs:
         run: |
           terraform init -input=false -backend-config=../../labs/03-foundation/backend.hcl
           terraform validate
-          terraform plan -input=false -out=tf.plan
+          terraform plan -input=false -lock-timeout=5m -out=tf.plan
           terraform show -json tf.plan > plan.json
 
+      # instrumenta/conftest-action@master bundles a 2021 OPA that cannot parse
+      # `import rego.v1`, which every policy here uses, and it was unpinned. Run a
+      # pinned release instead and verify its checksum before executing it.
+      - name: install conftest (pinned, checksum-verified)
+        run: |
+          V=0.50.0
+          curl -sSfL -o conftest.tgz "https://github.com/open-policy-agent/conftest/releases/download/v${V}/conftest_${V}_Linux_x86_64.tar.gz"
+          echo "a0e1421d0df83ad2ea7bca3235541de432c31901cb3a616895623bd8e480479d  conftest.tgz" | sha256sum -c -
+          tar -xzf conftest.tgz conftest
+
       - name: OPA gate (conftest)
-        uses: instrumenta/conftest-action@master
-        with:
-          files: stages/${{ matrix.stage }}/plan.json
-          policy: policy
+        run: ./conftest test stages/${{ matrix.stage }}/plan.json -p policy
