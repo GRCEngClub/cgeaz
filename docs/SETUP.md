@@ -16,6 +16,25 @@ account — see [VALIDATION-LOG.md](VALIDATION-LOG.md) for the receipts.
 - **A GitHub account** and `git`.
 - Domain 6 also uses **conftest** (`brew install conftest`).
 
+## 0b. Already an Azure customer? (no $200 credit for you — here's the real cost)
+
+The free-account credit is for brand-new accounts only. If your card is already
+registered with Azure (first learner to hit this: launch day), you run the labs
+pay-as-you-go — and that is fine, because the pipeline is deliberately cheap:
+
+- The **Defender for Cloud 30-day trial** is per subscription, per plan, on first
+  enablement — you still get it. Consider a fresh subscription in your existing
+  tenant for a clean sandbox.
+- Everything else is serverless or consumption tier: Cosmos DB serverless,
+  Y1 Functions (the free monthly grant usually covers the course), LRS storage,
+  and a small Log Analytics ingest. Torn down on schedule, the whole course
+  typically lands under a few dollars.
+- The budget alert in Lab 1 is not optional for you — it's your only spending
+  protection, since pay-as-you-go has no free-account safety net.
+- Run history for the capstone: keep the timers alive until you submit, tear
+  down after the score comes back. The grader reads run history from your
+  evidence store, so submit first, then tear down.
+
 ## 1. Timing strategy — read this before creating anything
 
 Two 30-day clocks matter, and you start both:
