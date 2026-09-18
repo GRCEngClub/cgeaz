@@ -21,6 +21,11 @@ variable "state_storage_account" {
   type        = string
 }
 
+variable "owner_email" {
+  description = "Platform owner. Findings that sit in no resource group (subscription-level assessments) have no tag to read, so the collector stamps them with this owner. Same value as stage 01's owner_email."
+  type        = string
+}
+
 variable "reports_retention_days" {
   description = "WORM retention on the reports container. 90 for the course; whatever your obligations demand in production."
   type        = number
