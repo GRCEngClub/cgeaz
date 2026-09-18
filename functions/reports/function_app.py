@@ -26,6 +26,24 @@ app = func.FunctionApp()
 
 # Severity-based SLAs: a POA&M is a plan, not a list.
 SLA_DAYS = {"High": 30, "Medium": 90, "Low": 180}
+SEVERITY_RANK = {"High": 0, "Medium": 1, "Low": 2}
+
+
+def _severity(finding: dict) -> str:
+    """A finding with no severity is treated as Medium (90-day SLA): a deliberate, visible default."""
+    return finding.get("severity") or "Medium"
+
+
+def _ordered(findings: list) -> list:
+    """Severity first, then a stable tie-break, so the same evidence always yields the same POA&M IDs.
+
+    Sorting severity as text would put Low before Medium, and Cosmos does not guarantee query
+    order, so an ID could otherwise land on a different finding when a report is regenerated.
+    """
+    return sorted(
+        findings,
+        key=lambda f: (SEVERITY_RANK.get(_severity(f), 3), str(f.get("displayName")), str(f.get("resourceId"))),
+    )
 
 
 def _clients():
@@ -81,8 +99,8 @@ def generate_poam() -> dict:
          "Detected (run)", "Scheduled Completion", "Owner", "Status"]
     )
     rows = []
-    for i, f in enumerate(sorted(findings, key=lambda x: x.get("severity") or ""), 1):
-        severity = f.get("severity") or "Medium"
+    for i, f in enumerate(_ordered(findings), 1):
+        severity = _severity(f)
         due = today + datetime.timedelta(days=SLA_DAYS.get(severity, 90))
         row = {
             "poamId": f"POAM-{today:%Y%m%d}-{i:03d}",
@@ -91,7 +109,8 @@ def generate_poam() -> dict:
             "severity": severity,
             "detectedRun": run_id,
             "scheduledCompletion": due.isoformat(),
-            "owner": "resource-group owner tag",  # resolved during Domain 5's lab extension
+            # Stamped on the document at collection time; reports never call live APIs.
+            "owner": f.get("owner") or "unassigned",
             "status": "Open",
         }
         rows.append(row)
@@ -128,10 +147,11 @@ def generate_sar() -> dict:
         "## Findings",
         "",
     ]
-    for f in sorted(findings, key=lambda x: x.get("severity") or ""):
+    for f in _ordered(findings):
         lines += [
             f"### {f.get('displayName')}",
             f"- Severity: {f.get('severity')}",
+            f"- Owner: {f.get('owner') or 'unassigned'}",
             f"- Resource: `{f.get('resourceId')}`",
             f"- Assessment ID: `{f.get('assessmentId')}` (trace: query the assessments container)",
             "",
