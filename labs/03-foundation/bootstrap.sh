@@ -12,10 +12,13 @@ SUB_ID=$(az account show --query id -o tsv)
 SUFFIX=$(echo "$SUB_ID" | tr -d '-' | cut -c1-8)
 SA_NAME="stgrctfstate${SUFFIX}"
 CONTAINER="tfstate"
+# The POA&M resolves finding owners from the resource group's owner tag, so the state
+# resource group needs one too. Defaults to whoever is signed in; override with OWNER_EMAIL.
+OWNER="${OWNER_EMAIL:-$(az account show --query user.name -o tsv)}"
 
-echo ">> State resource group: $RG_STATE"
+echo ">> State resource group: $RG_STATE (owner: $OWNER)"
 az group create --name "$RG_STATE" --location "$LOCATION" \
-  --tags env=shared purpose=terraform-state --output none
+  --tags env=shared purpose=terraform-state owner="$OWNER" --output none
 
 echo ">> State storage account: $SA_NAME (versioned, no public blob access)"
 az storage account create \
@@ -26,7 +29,7 @@ az storage account create \
   --kind StorageV2 \
   --min-tls-version TLS1_2 \
   --allow-blob-public-access false \
-  --tags env=shared purpose=terraform-state \
+  --tags env=shared purpose=terraform-state owner="$OWNER" \
   --output none
 
 echo ">> Enabling blob versioning (every state change becomes a recoverable version)"
