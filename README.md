@@ -1,5 +1,18 @@
 # An Azure GRC evidence pipeline, built and broken on a real subscription
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-F7DF1E)](LICENSE)
+![GRC engineering](https://img.shields.io/badge/GRC-engineering-C0392B)
+![Compliance as code](https://img.shields.io/badge/Compliance-as_code-2E7D32)
+![Azure](https://img.shields.io/badge/Azure-0078D4?logo=microsoftazure&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-5_stages-7B42BC?logo=terraform&logoColor=white)
+![Defender for Cloud](https://img.shields.io/badge/Defender_for_Cloud-assessments-0F6CBD)
+![Azure Functions](https://img.shields.io/badge/Azure_Functions-Python_3.11-FFB900?logo=azurefunctions&logoColor=black)
+![Evidence store](https://img.shields.io/badge/Evidence-Cosmos_DB_+_WORM-6A1B9A)
+![OPA conftest](https://img.shields.io/badge/OPA-conftest_gate-7D9199?logo=openpolicyagent&logoColor=white)
+![CI](https://img.shields.io/badge/CI-GitHub_Actions-2088FF?logo=githubactions&logoColor=white)
+![NIST 800-53](https://img.shields.io/badge/NIST_800--53-Rev._5-1F4E79)
+![NIST CSF](https://img.shields.io/badge/NIST_CSF-2.0-00838F)
+
 I wanted to test one idea: that compliance can run as a pipeline instead of a spreadsheet. On my own
 Azure subscription, a collector pulls Microsoft Defender's findings into a Cosmos DB that I own, two
 report generators turn that store into a POA&M and a SAR on timers, and an Azure Policy loop fixes
@@ -268,5 +281,12 @@ I would rather list these than let the README imply otherwise.
   consumption deployment cannot use. Each will be fixed or written up as an accepted risk.
 - The first scheduled POA&M is 2026-09-19 at 06:00 UTC; run history builds from there.
 
-The starter, the labs and the course are by the [GRC Engineering Club](https://www.grcengclub.com), and
-the rubric this is measured against is in [docs/RUBRIC.md](docs/RUBRIC.md).
+## License
+
+What I wrote is released under the [MIT License](LICENSE): the collector and report changes, the
+tests, the CI fixes, this README, and the control catalogue. This repository began as a fork of the
+[GRC Engineering Club](https://www.grcengclub.com) starter ([GRCEngClub/cgeaz](https://github.com/GRCEngClub/cgeaz)),
+which publishes no license, so I make no claim over the labs, stage skeletons and original policy
+rules that came from it. If you want to reuse those parts, ask the club.
+
+The rubric this is measured against is in [docs/RUBRIC.md](docs/RUBRIC.md).
