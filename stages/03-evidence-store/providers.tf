@@ -20,6 +20,7 @@ terraform {
 
 provider "azurerm" {
   features {}
+  subscription_id = var.subscription_id
   # Data-plane operations (containers, blobs) authenticate with Entra ID, not account keys —
   # required because the evidence storage account disables shared keys entirely.
   storage_use_azuread = true

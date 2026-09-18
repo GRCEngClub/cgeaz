@@ -17,14 +17,21 @@ RG = "/subscriptions/00000000-0000-0000-0000-000000000000/resourcegroups/rg/prov
 
 
 def finding(name, severity, owner, resource="a"):
-    return {"displayName": name, "severity": severity, "owner": owner, "resourceId": RG + resource}
+    return {"displayName": name, "severity": severity, "owner": owner, "resourceId": RG + resource, "assessmentId": "rule-" + name}
 
 
 class FakeCosmos:
     def __init__(self, findings, run=("run-1", "2026-09-18T20:42:05+00:00")):
         self.findings, self.run = findings, run
 
+    crosswalk = [
+        {"assessmentId": "rule-A", "frameworkId": "nist-800-53-r5", "controls": ["SC-8", "SC-13"]},
+        {"assessmentId": "rule-A", "frameworkId": "nist-csf-2.0", "controls": ["PR.DS-02"]},
+    ]
+
     def query_items(self, query, parameters=None, enable_cross_partition_query=False):
+        if "c.controls" in query:
+            return iter(self.crosswalk)
         if "TOP 1" in query:
             return iter([{"runId": self.run[0], "collectedAt": self.run[1]}] if self.run else [])
         return iter(self.findings)
@@ -43,7 +50,7 @@ class FakeBlobs:
 
 def generate(monkeypatch, findings, run=("run-1", "2026-09-18T20:42:05+00:00"), kind="poam"):
     blobs = FakeBlobs()
-    monkeypatch.setattr(reports, "_clients", lambda: (FakeCosmos(findings, run), blobs))
+    monkeypatch.setattr(reports, "_clients", lambda: ((FakeCosmos(findings, run),) * 3, blobs))
     result = reports.generate_poam() if kind == "poam" else reports.generate_sar()
     return result, blobs
 
@@ -95,10 +102,30 @@ def test_nothing_is_ever_overwritten_in_the_immutable_container(monkeypatch):
     assert all(overwrite is False for _, _, overwrite in poam.uploads + sar.uploads)
 
 
-def test_an_empty_store_yields_a_valid_empty_report(monkeypatch):
+def test_no_recorded_run_writes_nothing_rather_than_an_empty_report(monkeypatch):
     result, blobs = generate(monkeypatch, [], run=None)
     assert result["items"] == 0 and result["runId"] is None
-    assert poam_items(blobs) == [] and len(blobs.uploads) == 2
+    assert blobs.uploads == [], "a report with no run behind it would be a claim about nothing"
+
+
+def test_a_report_is_named_by_the_sweep_it_reports_on(monkeypatch):
+    result, _ = generate(monkeypatch, [finding("A", "High", "a@example.com")])
+    assert result["json"] == "poam/2026/09/poam-2026-09-18T2042Z.json"
+
+
+def test_reporting_the_same_run_twice_is_a_no_op_not_an_error(monkeypatch):
+    blobs = FakeBlobs()
+    stored = set()
+
+    def once(name, data, overwrite=False):
+        if name in stored:
+            raise reports.ResourceExistsError("exists")
+        stored.add(name)
+
+    blobs.upload_blob = once
+    monkeypatch.setattr(reports, "_clients", lambda: ((FakeCosmos([finding("A", "High", "a@x")]),) * 3, blobs))
+    reports.generate_poam()
+    assert reports.generate_poam()["items"] == 1
 
 
 def test_the_sar_carries_owner_and_severity_order(monkeypatch):
@@ -115,3 +142,10 @@ def test_reports_read_the_evidence_store_only():
     source = SRC.read_text()
     for forbidden in ("management.azure.com", "import requests", "Microsoft.Security", "DefenderForCloud"):
         assert forbidden not in source, f"report generators must not touch {forbidden}"
+
+
+def test_each_finding_carries_the_controls_the_stored_crosswalk_maps_it_to(monkeypatch):
+    _, blobs = generate(monkeypatch, [finding("A", "High", "a@example.com"), finding("B", "Low", "b@example.com")])
+    rows = {i["weakness"]: i for i in poam_items(blobs)}
+    assert rows["A"]["nist80053r5"] == "SC-8, SC-13" and rows["A"]["csf2"] == "PR.DS-02"
+    assert rows["B"]["nist80053r5"] == "" and rows["B"]["csf2"] == "", "an unmapped finding says so instead of guessing"

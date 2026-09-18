@@ -5,7 +5,7 @@ artifact resolves to a stored, timestamped document. A report that reads live da
 is a report whose numbers can't be reproduced tomorrow; a report that reads the
 store is a fact with a receipt.
 
-Generators here: POA&M (xlsx + json, daily) and SAR (markdown, weekly), both with
+Generators here: POA&M (xlsx + json) and SAR (markdown), each cut from one recorded collection run, both with
 HTTP triggers for labs and demos.
 """
 
@@ -17,6 +17,7 @@ import os
 from collections import Counter
 
 import azure.functions as func
+from azure.core.exceptions import ResourceExistsError
 from azure.cosmos import CosmosClient
 from azure.identity import DefaultAzureCredential
 from azure.storage.blob import BlobServiceClient
@@ -48,21 +49,19 @@ def _ordered(findings: list) -> list:
 
 def _clients():
     credential = DefaultAzureCredential()
-    cosmos = (
-        CosmosClient(os.environ["COSMOS_ENDPOINT"], credential)
-        .get_database_client(os.environ["COSMOS_DATABASE"])
-        .get_container_client("assessments")
-    )
+    db = CosmosClient(os.environ["COSMOS_ENDPOINT"], credential).get_database_client(os.environ["COSMOS_DATABASE"])
+    cosmos = tuple(db.get_container_client(name) for name in ("assessments", "runs", "mappings"))
     blobs = BlobServiceClient(
         account_url=os.environ["REPORTS_ACCOUNT_URL"], credential=credential
     ).get_container_client(os.environ["REPORTS_CONTAINER"])
     return cosmos, blobs
 
 
-def _latest_run(cosmos):
-    """Pin the report to a specific collection sweep — a statement about a known moment."""
+def _latest_run(stores):
+    """Pin the report to the newest recorded sweep from the run ledger: a statement about a known moment."""
+    runs = stores[1]
     rows = list(
-        cosmos.query_items(
+        runs.query_items(
             "SELECT TOP 1 c.runId, c.collectedAt FROM c ORDER BY c.collectedAt DESC",
             enable_cross_partition_query=True,
         )
@@ -70,9 +69,20 @@ def _latest_run(cosmos):
     return (rows[0]["runId"], rows[0]["collectedAt"]) if rows else (None, None)
 
 
-def _unhealthy(cosmos, run_id):
+def _crosswalk(stores) -> dict:
+    """assessmentId -> {framework: [controls]}, read from the stored crosswalk: one collection, any framework."""
+    table: dict = {}
+    for row in stores[2].query_items(
+        "SELECT c.assessmentId, c.frameworkId, c.controls FROM c", enable_cross_partition_query=True
+    ):
+        table.setdefault(row["assessmentId"], {})[row["frameworkId"]] = row["controls"]
+    return table
+
+
+def _unhealthy(stores, run_id):
+    assessments = stores[0]
     return list(
-        cosmos.query_items(
+        assessments.query_items(
             "SELECT * FROM c WHERE c.runId = @run AND c.status = 'Unhealthy'",
             parameters=[{"name": "@run", "value": run_id}],
             enable_cross_partition_query=True,
@@ -80,30 +90,48 @@ def _unhealthy(cosmos, run_id):
     )
 
 
-def _dated_path(prefix: str, ext: str) -> str:
-    now = datetime.datetime.now(datetime.timezone.utc)
-    return f"{prefix}/{now:%Y/%m}/{prefix}-{now:%Y-%m-%d}.{ext}"
+def _run_path(prefix: str, ext: str, collected_at: str) -> str:
+    """Named by the sweep it reports on, so a report is reproducible and one run yields one file."""
+    at = datetime.datetime.fromisoformat(collected_at)
+    return f"{prefix}/{at:%Y/%m}/{prefix}-{at:%Y-%m-%dT%H%MZ}.{ext}"
+
+
+def _write_once(blobs, path: str, data) -> bool:
+    """Immutable upload. False if this run's report already exists: same run, same report."""
+    try:
+        blobs.upload_blob(path, data, overwrite=False)
+        return True
+    except ResourceExistsError:
+        logging.info("%s already stored; nothing to do", path)
+        return False
 
 
 def generate_poam() -> dict:
     cosmos, blobs = _clients()
     run_id, collected_at = _latest_run(cosmos)
-    findings = _unhealthy(cosmos, run_id) if run_id else []
-    today = datetime.date.today()
+    if not run_id:
+        # No recorded sweep yet: an empty report would be a claim about nothing.
+        logging.warning("POA&M skipped: the run ledger is empty")
+        return {"items": 0, "runId": None, "skipped": "no recorded collection run"}
+    findings = _unhealthy(cosmos, run_id)
+    crosswalk = _crosswalk(cosmos)
+    # Dates come from the sweep, not the wall clock, so regenerating a report gives the same report.
+    sweep = datetime.datetime.fromisoformat(collected_at)
+    today = sweep.date()
 
     wb = Workbook()
     ws = wb.active
     ws.title = "POA&M"
     ws.append(
         ["POA&M ID", "Weakness", "Affected Resource", "Severity",
-         "Detected (run)", "Scheduled Completion", "Owner", "Status"]
+         "Detected (run)", "Scheduled Completion", "Owner", "Status", "NIST 800-53 Rev.5", "CSF 2.0"]
     )
     rows = []
     for i, f in enumerate(_ordered(findings), 1):
         severity = _severity(f)
         due = today + datetime.timedelta(days=SLA_DAYS.get(severity, 90))
         row = {
-            "poamId": f"POAM-{today:%Y%m%d}-{i:03d}",
+            "poamId": f"POAM-{sweep:%Y%m%dT%H%M}-{i:03d}",
             "weakness": f.get("displayName"),
             "resourceId": f.get("resourceId"),
             "severity": severity,
@@ -112,19 +140,21 @@ def generate_poam() -> dict:
             # Stamped on the document at collection time; reports never call live APIs.
             "owner": f.get("owner") or "unassigned",
             "status": "Open",
+            "nist80053r5": ", ".join(crosswalk.get(f.get("assessmentId"), {}).get("nist-800-53-r5", [])),
+            "csf2": ", ".join(crosswalk.get(f.get("assessmentId"), {}).get("nist-csf-2.0", [])),
         }
         rows.append(row)
         ws.append(list(row.values()))
 
     xlsx = io.BytesIO()
     wb.save(xlsx)
-    xlsx_path = _dated_path("poam", "xlsx")
-    json_path = _dated_path("poam", "json")
-    blobs.upload_blob(xlsx_path, xlsx.getvalue(), overwrite=False)
-    blobs.upload_blob(
+    xlsx_path = _run_path("poam", "xlsx", collected_at)
+    json_path = _run_path("poam", "json", collected_at)
+    _write_once(blobs, xlsx_path, xlsx.getvalue())
+    _write_once(
+        blobs,
         json_path,
         json.dumps({"runId": run_id, "collectedAt": collected_at, "items": rows}, indent=2),
-        overwrite=False,
     )
     logging.info("POA&M: %d items -> %s", len(rows), xlsx_path)
     return {"items": len(rows), "runId": run_id, "xlsx": xlsx_path, "json": json_path}
@@ -133,7 +163,10 @@ def generate_poam() -> dict:
 def generate_sar() -> dict:
     cosmos, blobs = _clients()
     run_id, collected_at = _latest_run(cosmos)
-    findings = _unhealthy(cosmos, run_id) if run_id else []
+    if not run_id:
+        logging.warning("SAR skipped: the run ledger is empty")
+        return {"findings": 0, "runId": None, "skipped": "no recorded collection run"}
+    findings = _unhealthy(cosmos, run_id)
     by_severity = Counter(f.get("severity") or "Unknown" for f in findings)
 
     lines = [
@@ -157,19 +190,20 @@ def generate_sar() -> dict:
             "",
         ]
 
-    path = _dated_path("sar", "md")
-    blobs.upload_blob(path, "\n".join(lines), overwrite=False)
+    path = _run_path("sar", "md", collected_at)
+    _write_once(blobs, path, "\n".join(lines))
     logging.info("SAR: %d findings -> %s", len(findings), path)
     return {"findings": len(findings), "runId": run_id, "path": path}
 
 
-@app.timer_trigger(schedule="0 0 6 * * *", arg_name="timer", run_on_startup=False)
-def poam_daily(timer: func.TimerRequest) -> None:
+@app.timer_trigger(schedule="0 10 * * * *", arg_name="timer", run_on_startup=False)
+def poam_scheduled(timer: func.TimerRequest) -> None:
+    """Ten minutes after each sweep, so the report always has a fresh run to cut from."""
     generate_poam()
 
 
-@app.timer_trigger(schedule="0 0 7 * * 1", arg_name="timer", run_on_startup=False)
-def sar_weekly(timer: func.TimerRequest) -> None:
+@app.timer_trigger(schedule="0 20 * * * *", arg_name="timer", run_on_startup=False)
+def sar_scheduled(timer: func.TimerRequest) -> None:
     generate_sar()
 
 

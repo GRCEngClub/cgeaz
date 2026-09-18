@@ -1,0 +1,55 @@
+# Static analysis of the Terraform stages:   checkov --config-file .checkov.yaml
+# Every skip is a decision with a reason. Three kinds.
+#
+# 1. Cost and scale trade-offs in a single-subscription lab budget. The identity, WORM and
+#    least-privilege story does not depend on them; they are the production upgrades.
+#    CKV_AZURE_59, CKV_AZURE_99, CKV_AZURE_101, CKV_AZURE_221, CKV2_AZURE_33
+#        Public endpoints stay on: the deployer, CI runners and the function apps reach the
+#        stores over TLS with Entra identities, and data-plane auth is identity-or-nothing
+#        (evidence storage shared keys off, Cosmos local auth off). Private endpoints need a
+#        VNet and a paid plan.
+#    CKV_AZURE_100, CKV2_AZURE_1   Platform-managed encryption at rest; customer-managed keys
+#        need a Key Vault and a rotation runbook.
+#    CKV_AZURE_206   LRS: kilobytes of evidence in one region.
+#    CKV_AZURE_212, CKV_AZURE_225   Consumption (Y1) plans have no instance-count or zone
+#        redundancy settings; those checks target dedicated plans.
+#    CKV_AZURE_132   The control plane is already least-privilege RBAC and the deployer owns the account.
+#
+# 2. The Functions runtime scratch accounts (func_internal in stages 03 and 04).
+#    CKV2_AZURE_40, CKV2_AZURE_41   The Consumption runtime needs AzureWebJobsStorage key auth
+#        for zip deploys and timers. The evidence account, which holds the data, has shared keys
+#        disabled and passes both checks. policy/storage.rego encodes the same carve-out by name.
+#
+# 3. Scanner limitations, control verified by hand.
+#    CKV_AZURE_140   Looks for the azurerm 3.x attribute local_authentication_disabled; stage 03
+#        sets local_authentication_enabled = false (the 4.x name), and policy/cosmos_identity.rego
+#        gates it.
+#    CKV_AZURE_33, CKV2_AZURE_21   Classic Storage Analytics logging. Storage diagnostics go to
+#        Log Analytics through Azure Policy instead.
+#
+# checkov cannot parse stages/01-foundation/policies.tf or stages/06-enforcement/main.tf (deeply
+# nested jsonencode policy rules). Those files hold Azure Policy definitions; terraform validate,
+# tflint and the conftest gate cover them.
+directory:
+  - stages
+framework:
+  - terraform
+skip-check:
+  - CKV_AZURE_33
+  - CKV_AZURE_59
+  - CKV_AZURE_99
+  - CKV_AZURE_100
+  - CKV_AZURE_101
+  - CKV_AZURE_132
+  - CKV_AZURE_140
+  - CKV_AZURE_206
+  - CKV_AZURE_212
+  - CKV_AZURE_221
+  - CKV_AZURE_225
+  - CKV2_AZURE_1
+  - CKV2_AZURE_21
+  - CKV2_AZURE_33
+  - CKV2_AZURE_40
+  - CKV2_AZURE_41
+compact: true
+quiet: true

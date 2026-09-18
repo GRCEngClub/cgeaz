@@ -1,0 +1,13 @@
+// Who is changing the subscription? Any successful administrative write or delete by a caller
+// other than the remediation identity. In this design every change arrives through a reviewed
+// pull request and a pipeline apply, so a row is a prompt to match it to a merged change; a row
+// with no matching change is an out-of-band change. terraform plan (drift.yml) answers the other
+// question: does reality still match the code.
+// Rendered by templatefile() in tripwire.tf, which supplies remediation_principal_id.
+AzureActivity
+| where CategoryValue == "Administrative"
+| where ActivityStatusValue in~ ("Success", "Succeeded")
+| where OperationNameValue endswith "/write" or OperationNameValue endswith "/delete"
+| where isnotempty(Caller)
+| where tolower(Caller) != tolower("${remediation_principal_id}")
+| project TimeGenerated, Caller, OperationNameValue, ResourceGroup, _ResourceId, CorrelationId

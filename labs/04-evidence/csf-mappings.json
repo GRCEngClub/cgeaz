@@ -1,0 +1,478 @@
+[
+  {
+    "assessmentId": "109201d2-1f48-78e5-eaa3-1d7f9c879786",
+    "displayName": "An activity log alert should exist for specific Administrative operations",
+    "nist80053r5": [
+      "AU-6",
+      "SI-4"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.AE-02"
+    ]
+  },
+  {
+    "assessmentId": "83c16401-b71c-b1e4-1b30-bf478bd08568",
+    "displayName": "An activity log alert should exist for specific Policy operations",
+    "nist80053r5": [
+      "AU-6",
+      "SI-4"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.AE-02"
+    ]
+  },
+  {
+    "assessmentId": "fa6cd48f-4a44-663b-673c-308eb72adca6",
+    "displayName": "Application Insights components should block log ingestion and querying from public networks",
+    "nist80053r5": [
+      "SC-7",
+      "AC-4"
+    ],
+    "csf2": [
+      "PR.IR-01"
+    ]
+  },
+  {
+    "assessmentId": "35acf108-84bf-3626-97ee-67a361d32006",
+    "displayName": "Audit resource location matches resource group location",
+    "nist80053r5": [
+      "CM-2",
+      "CM-6"
+    ],
+    "csf2": [
+      "PR.PS-01"
+    ]
+  },
+  {
+    "assessmentId": "276b1952-c364-852b-11e5-657f0fa34dc6",
+    "displayName": "Azure Cosmos DB accounts should have firewall rules",
+    "nist80053r5": [
+      "SC-7",
+      "AC-4"
+    ],
+    "csf2": [
+      "PR.IR-01"
+    ]
+  },
+  {
+    "assessmentId": "14acab4e-ad95-11ec-b909-0242ac120002",
+    "displayName": "Azure Cosmos DB accounts should use Azure Active Directory as the only authentication method",
+    "nist80053r5": [
+      "IA-2",
+      "IA-5",
+      "AC-3"
+    ],
+    "csf2": [
+      "PR.AA-01",
+      "PR.AA-05"
+    ]
+  },
+  {
+    "assessmentId": "334a182c-7c2c-41bc-ae1e-55327891ab50",
+    "displayName": "Azure Cosmos DB should disable public network access",
+    "nist80053r5": [
+      "SC-7",
+      "AC-4"
+    ],
+    "csf2": [
+      "PR.IR-01"
+    ]
+  },
+  {
+    "assessmentId": "991e6240-afac-2bad-600f-86da94fd9269",
+    "displayName": "Azure Monitor should collect activity logs from all regions",
+    "nist80053r5": [
+      "AU-2",
+      "AU-12"
+    ],
+    "csf2": [
+      "PR.PS-04",
+      "DE.CM-01"
+    ]
+  },
+  {
+    "assessmentId": "0c22fa4a-e5eb-5b1b-de7c-06c974127e24",
+    "displayName": "Azure Monitor solution 'Security and Audit' must be deployed",
+    "nist80053r5": [
+      "AU-2",
+      "AU-12"
+    ],
+    "csf2": [
+      "PR.PS-04",
+      "DE.CM-01"
+    ]
+  },
+  {
+    "assessmentId": "5fe196e2-22c7-5e40-378f-be94baa6ba5e",
+    "displayName": "Azure subscriptions should have a log profile for Activity Log",
+    "nist80053r5": [
+      "AU-2",
+      "AU-12"
+    ],
+    "csf2": [
+      "PR.PS-04",
+      "DE.CM-01"
+    ]
+  },
+  {
+    "assessmentId": "7b3d4796-9400-2904-692b-4a5ede7f0a1e",
+    "displayName": "CORS should not allow every resource to access Function Apps",
+    "nist80053r5": [
+      "SC-7",
+      "AC-3"
+    ],
+    "csf2": [
+      "PR.IR-01"
+    ]
+  },
+  {
+    "assessmentId": "80dc29d6-9887-4071-a66c-e763376c2de3",
+    "displayName": "CosmosDB accounts should use private link",
+    "nist80053r5": [
+      "SC-7",
+      "AC-4"
+    ],
+    "csf2": [
+      "PR.IR-01"
+    ]
+  },
+  {
+    "assessmentId": "3869fbd7-5d90-84e4-37bd-d9a7f4ce9a24",
+    "displayName": "Email notification for high severity alerts should be enabled",
+    "nist80053r5": [
+      "IR-6",
+      "SI-5"
+    ],
+    "csf2": [
+      "RS.CO-02",
+      "DE.AE-06"
+    ]
+  },
+  {
+    "assessmentId": "9f97e78d-88ee-a48d-abe2-5ef12954e7ea",
+    "displayName": "Email notification to subscription owner for high severity alerts should be enabled",
+    "nist80053r5": [
+      "IR-6",
+      "SI-5"
+    ],
+    "csf2": [
+      "RS.CO-02",
+      "DE.AE-06"
+    ]
+  },
+  {
+    "assessmentId": "972a6579-f38f-c0b9-1b4b-a5bbeba3ab5b",
+    "displayName": "FTPS should be required in function apps",
+    "nist80053r5": [
+      "SC-8",
+      "SC-13"
+    ],
+    "csf2": [
+      "PR.DS-02"
+    ]
+  },
+  {
+    "assessmentId": "cb0acdc6-0846-fd48-debe-9905af151b6d",
+    "displayName": "Function App should only be accessible over HTTPS",
+    "nist80053r5": [
+      "SC-8",
+      "SC-13"
+    ],
+    "csf2": [
+      "PR.DS-02"
+    ]
+  },
+  {
+    "assessmentId": "964349c3-52e3-be93-244e-fa3cc527f4c9",
+    "displayName": "Log Analytics Workspaces should block non-Azure Active Directory based ingestion.",
+    "nist80053r5": [
+      "IA-2",
+      "IA-5",
+      "AC-3"
+    ],
+    "csf2": [
+      "PR.AA-01",
+      "PR.AA-05"
+    ]
+  },
+  {
+    "assessmentId": "f57c1677-d9cc-0b2a-4237-8f17f8239c4b",
+    "displayName": "Log Analytics workspaces should block log ingestion and querying from public networks",
+    "nist80053r5": [
+      "SC-7",
+      "AC-4"
+    ],
+    "csf2": [
+      "PR.IR-01"
+    ]
+  },
+  {
+    "assessmentId": "23aa9cbe-c2fb-6a2f-6c97-885a6d48c4d1",
+    "displayName": "Managed identity should be enabled on function apps",
+    "nist80053r5": [
+      "IA-2",
+      "IA-5"
+    ],
+    "csf2": [
+      "PR.AA-01"
+    ]
+  },
+  {
+    "assessmentId": "e0e431eb-22b3-4f34-ae0d-5ec229fc28e7",
+    "displayName": "Microsoft Defender CSPM should be enabled",
+    "nist80053r5": [
+      "RA-5",
+      "SI-4"
+    ],
+    "csf2": [
+      "ID.RA-01",
+      "DE.CM-01"
+    ]
+  },
+  {
+    "assessmentId": "96946040-1b25-4dc4-b845-4f341b3fcaab",
+    "displayName": "Microsoft Defender for APIs should be enabled",
+    "nist80053r5": [
+      "RA-5",
+      "SI-4"
+    ],
+    "csf2": [
+      "ID.RA-01",
+      "DE.CM-01"
+    ]
+  },
+  {
+    "assessmentId": "0876ef51-fee7-449d-ba1e-f2662c7e43c6",
+    "displayName": "Microsoft Defender for App Service should be enabled",
+    "nist80053r5": [
+      "SI-4",
+      "RA-5"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.CM-09"
+    ]
+  },
+  {
+    "assessmentId": "787b7b02-2a92-9485-46a3-009afe4a6bf1",
+    "displayName": "Microsoft Defender for Azure Cosmos DB should be enabled",
+    "nist80053r5": [
+      "SI-4",
+      "RA-5"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.CM-09"
+    ]
+  },
+  {
+    "assessmentId": "58d72d9d-0310-4792-9a3b-6dd111093cdb",
+    "displayName": "Microsoft Defender for Azure SQL Database servers should be enabled",
+    "nist80053r5": [
+      "SI-4",
+      "RA-5"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.CM-09"
+    ]
+  },
+  {
+    "assessmentId": "e599a9fe-30e3-47c6-a173-8b4b6d9d3255",
+    "displayName": "Microsoft Defender for Containers should be enabled",
+    "nist80053r5": [
+      "RA-5",
+      "SI-4"
+    ],
+    "csf2": [
+      "ID.RA-01",
+      "DE.CM-01"
+    ]
+  },
+  {
+    "assessmentId": "b1af52e4-e968-4e2b-b6d0-6736c9651f0a",
+    "displayName": "Microsoft Defender for Key Vault should be enabled",
+    "nist80053r5": [
+      "SI-4",
+      "RA-5"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.CM-09"
+    ]
+  },
+  {
+    "assessmentId": "f0fb2a7e-16d5-849f-be57-86db712e9bd0",
+    "displayName": "Microsoft Defender for Resource Manager should be enabled",
+    "nist80053r5": [
+      "SI-4",
+      "RA-5"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.CM-09"
+    ]
+  },
+  {
+    "assessmentId": "6ac66a74-761f-4a59-928a-d373eea3f028",
+    "displayName": "Microsoft Defender for SQL servers on machines should be enabled",
+    "nist80053r5": [
+      "SI-4",
+      "RA-5"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.CM-09"
+    ]
+  },
+  {
+    "assessmentId": "26f0d5bb-1398-49be-83c5-7161c2e39d8b",
+    "displayName": "Microsoft Defender for Storage plan should be enabled with Malware Scanning and Sensitive Data Threat Detection",
+    "nist80053r5": [
+      "SI-4",
+      "RA-5"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.CM-09"
+    ]
+  },
+  {
+    "assessmentId": "b6a28450-dd5d-4ba4-8806-245e20ef6632",
+    "displayName": "Microsoft Defender for open-source relational databases should be enabled",
+    "nist80053r5": [
+      "SI-4",
+      "RA-5"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.CM-09"
+    ]
+  },
+  {
+    "assessmentId": "56a6e81f-7413-4f72-9a1b-aaeeaa87c872",
+    "displayName": "Microsoft Defender for servers should be enabled",
+    "nist80053r5": [
+      "RA-5",
+      "SI-4"
+    ],
+    "csf2": [
+      "ID.RA-01",
+      "DE.CM-01"
+    ]
+  },
+  {
+    "assessmentId": "093c685b-56dd-13a3-8ed5-887a001837a2",
+    "displayName": "Remote debugging should be turned off for Function App",
+    "nist80053r5": [
+      "CM-7",
+      "AC-17"
+    ],
+    "csf2": [
+      "PR.PS-01"
+    ]
+  },
+  {
+    "assessmentId": "1c5de8e1-f68d-6a17-e0d2-ec259c42768c",
+    "displayName": "Secure transfer to storage accounts should be enabled",
+    "nist80053r5": [
+      "SC-8",
+      "SC-13"
+    ],
+    "csf2": [
+      "PR.DS-02"
+    ]
+  },
+  {
+    "assessmentId": "0c176944-befa-3def-f44b-560699988734",
+    "displayName": "Security Center standard pricing tier should be selected",
+    "nist80053r5": [
+      "SI-4",
+      "RA-5"
+    ],
+    "csf2": [
+      "DE.CM-01",
+      "DE.CM-09"
+    ]
+  },
+  {
+    "assessmentId": "51fd8bb1-0db4-bbf1-7e2b-cfcba7eb66a6",
+    "displayName": "Storage account public access should be disallowed",
+    "nist80053r5": [
+      "AC-3",
+      "AC-22"
+    ],
+    "csf2": [
+      "PR.AA-05",
+      "PR.DS-01"
+    ]
+  },
+  {
+    "assessmentId": "cdc78c07-02b0-4af0-1cb2-cb7c672a8b0a",
+    "displayName": "Storage account should use a private link connection",
+    "nist80053r5": [
+      "SC-7",
+      "AC-4"
+    ],
+    "csf2": [
+      "PR.IR-01"
+    ]
+  },
+  {
+    "assessmentId": "47bb383c-8e25-95f0-c2aa-437add1d87d3",
+    "displayName": "Storage accounts should be migrated to new Azure Resource Manager resources",
+    "nist80053r5": [
+      "CM-2"
+    ],
+    "csf2": [
+      "PR.PS-01"
+    ]
+  },
+  {
+    "assessmentId": "3b363842-30f5-4056-980d-3a40fa5de8b3",
+    "displayName": "Storage accounts should prevent shared key access",
+    "nist80053r5": [
+      "IA-5",
+      "AC-3"
+    ],
+    "csf2": [
+      "PR.AA-05"
+    ]
+  },
+  {
+    "assessmentId": "ad4f3ff1-30eb-5042-16ed-27198f640b8d",
+    "displayName": "Storage accounts should restrict network access using virtual network rules",
+    "nist80053r5": [
+      "SC-7",
+      "AC-4"
+    ],
+    "csf2": [
+      "PR.IR-01"
+    ]
+  },
+  {
+    "assessmentId": "77758c9d-8a56-5f54-6ff7-69a762ca6004",
+    "displayName": "Subscriptions should have a contact email address for security issues",
+    "nist80053r5": [
+      "IR-6",
+      "SI-5"
+    ],
+    "csf2": [
+      "RS.CO-02",
+      "DE.AE-06"
+    ]
+  },
+  {
+    "assessmentId": "15be5f3c-e0a4-c0fa-fbff-8e50339b4b22",
+    "displayName": "TLS should be updated to the latest version for function apps",
+    "nist80053r5": [
+      "SC-8",
+      "SC-13"
+    ],
+    "csf2": [
+      "PR.DS-02"
+    ]
+  }
+]

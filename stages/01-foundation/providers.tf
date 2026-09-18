@@ -18,5 +18,5 @@ terraform {
 
 provider "azurerm" {
   features {}
-  # Set via ARM_SUBSCRIPTION_ID; azurerm 4.x requires explicit subscription targeting.
+  subscription_id = var.subscription_id
 }

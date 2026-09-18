@@ -1,0 +1,73 @@
+name: static-checks
+
+# No cloud credentials needed: everything here reads files. Runs on every change so a red
+# check shows up before the credentialed compliance gate spends a plan on it.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stage: [01-foundation, 02-activation, 03-evidence-store, 04-reporting, 06-enforcement]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+      - name: fmt
+        run: terraform fmt -check -recursive stages/${{ matrix.stage }}
+      - name: validate (no backend, no credentials)
+        working-directory: stages/${{ matrix.stage }}
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          github_token: ${{ github.token }}
+      - name: tflint
+        working-directory: stages/${{ matrix.stage }}
+        run: tflint --config ../../.tflint.hcl
+
+  checkov:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install checkov==3.3.19
+      - run: checkov --config-file .checkov.yaml
+
+  gate-rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: install conftest (pinned, checksum-verified)
+        run: |
+          V=0.50.0
+          curl -sSfL -o conftest.tgz "https://github.com/open-policy-agent/conftest/releases/download/v${V}/conftest_${V}_Linux_x86_64.tar.gz"
+          echo "a0e1421d0df83ad2ea7bca3235541de432c31901cb3a616895623bd8e480479d  conftest.tgz" | sha256sum -c -
+          tar -xzf conftest.tgz conftest
+      - name: the rules accept the compliant plan and reject the insecure one
+        run: policy/test-examples.sh ./conftest
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

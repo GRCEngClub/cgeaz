@@ -49,9 +49,19 @@ resource "azurerm_cosmosdb_sql_database" "grc" {
   account_name        = azurerm_cosmosdb_account.evidence.name
 }
 
-# assessments: one document per finding per run. Partitioned by subscription+date query pattern.
+# assessments: one document per finding per resource per run; runs are never overwritten.
 resource "azurerm_cosmosdb_sql_container" "assessments" {
   name                = "assessments"
+  resource_group_name = local.evidence_rg
+  account_name        = azurerm_cosmosdb_account.evidence.name
+  database_name       = azurerm_cosmosdb_sql_database.grc.name
+  partition_key_paths = ["/subscriptionId"]
+}
+
+# runs: the ledger. One entry per collection sweep (when, how it started, how many documents,
+# how many findings). It is what lets a report pin to a run and lets anyone list the run history.
+resource "azurerm_cosmosdb_sql_container" "runs" {
+  name                = "runs"
   resource_group_name = local.evidence_rg
   account_name        = azurerm_cosmosdb_account.evidence.name
   database_name       = azurerm_cosmosdb_sql_database.grc.name
@@ -92,6 +102,14 @@ resource "azurerm_storage_account" "evidence" {
 
   blob_properties {
     versioning_enabled = true
+    delete_retention_policy {
+      days = 7
+    }
+  }
+
+  # Any SAS that is ever issued against the evidence account expires within a day.
+  sas_policy {
+    expiration_period = "01.00:00:00"
   }
 
   tags = local.common_tags

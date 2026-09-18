@@ -26,10 +26,12 @@ def assessment(name="rule-1", resource=RES_A, **props):
     return {"name": name, "properties": base}
 
 
-def test_id_is_deterministic_across_runs():
+def test_a_retried_write_upserts_but_the_next_sweep_keeps_history():
     first = collector.build_document(assessment(), SUB, "run-1", "2026-09-18T00:00:00+00:00")
+    retry = collector.build_document(assessment(), SUB, "run-1", "2026-09-18T00:00:00+00:00")
     later = collector.build_document(assessment(), SUB, "run-2", "2026-09-19T00:00:00+00:00")
-    assert first["id"] == later["id"], "a re-run must upsert the same document, never duplicate it"
+    assert first["id"] == retry["id"], "a retried write of the same sweep must not duplicate"
+    assert first["id"] != later["id"], "the next sweep must not overwrite this one"
 
 
 def test_id_differs_per_resource_and_per_rule():
@@ -138,7 +140,7 @@ def wire(monkeypatch, pages, rg_error=None):
     monkeypatch.setenv("COSMOS_DATABASE", "grc")
     monkeypatch.setenv("DEFAULT_OWNER", "platform@example.com")
 
-    container, urls, served = FakeContainer(), [], {"assessment_pages": 0}
+    container, runs, urls, served = FakeContainer(), FakeContainer(), [], {"assessment_pages": 0}
 
     def fake_get(url, headers, timeout):
         urls.append(url)
@@ -151,7 +153,9 @@ def wire(monkeypatch, pages, rg_error=None):
         return FakeResponse(pages[served["assessment_pages"] - 1])
 
     fake_client = types.SimpleNamespace(
-        get_database_client=lambda _: types.SimpleNamespace(get_container_client=lambda _: container)
+        get_database_client=lambda _: types.SimpleNamespace(
+            get_container_client=lambda name: {"assessments": container, "runs": runs}[name]
+        )
     )
     monkeypatch.setattr(collector.requests, "get", fake_get)
     monkeypatch.setattr(collector, "CosmosClient", lambda *a, **k: fake_client)
@@ -160,6 +164,7 @@ def wire(monkeypatch, pages, rg_error=None):
         "DefaultAzureCredential",
         lambda: types.SimpleNamespace(get_token=lambda scope: types.SimpleNamespace(token="fake-token")),
     )
+    container.runs = runs
     return container, urls
 
 
@@ -171,7 +176,7 @@ def test_collect_requests_expand_follows_next_link_and_stamps_owners(monkeypatch
     }
     container, urls = wire(monkeypatch, pages)
 
-    result = collector._collect()
+    result = collector._collect("manual")
 
     assessment_urls = [u for u in urls if "/resourcegroups" not in u]
     assert "$expand=metadata" in assessment_urls[0], "without expand the API returns no severity"
@@ -182,13 +187,17 @@ def test_collect_requests_expand_follows_next_link_and_stamps_owners(monkeypatch
     assert by_name["r1"]["owner"] == "owner@example.com"
     assert by_name["r2"]["owner"] == "platform@example.com"
     assert by_name["r3"]["owner"] is None and by_name["r3"]["ownerSource"] == "unassigned"
+    (ledger,) = container.runs.items
+    assert ledger["runId"] == result["runId"] and ledger["documents"] == 3
+    assert ledger["unhealthy"] == 3 and ledger["trigger"] == "manual"
+    assert ledger["collectedAt"] == result["collectedAt"]
 
 
 def test_a_failed_tag_read_costs_the_sweep_nothing_but_is_not_silent(monkeypatch, caplog):
     pages = {0: {"value": [assessment(name="r1", resource=TAGGED_RG)]}}
     container, _ = wire(monkeypatch, pages, rg_error=collector.requests.RequestException("403"))
 
-    result = collector._collect()
+    result = collector._collect("manual")
 
     assert result["written"] == 1, "the evidence itself must still land"
     assert container.items[0]["ownerSource"] == "unassigned"

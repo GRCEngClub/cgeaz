@@ -26,6 +26,7 @@ a denied deployment.
 ```bash
 ./bootstrap.sh
 export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+export TF_VAR_subscription_id=$ARM_SUBSCRIPTION_ID   # every stage takes the subscription explicitly
 ```
 
 Creates the state resource group, a **versioned** storage account, the `tfstate`

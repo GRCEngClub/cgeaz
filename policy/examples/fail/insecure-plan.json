@@ -1,0 +1,72 @@
+{
+  "resource_changes": [
+    {
+      "address": "azurerm_storage_account.bad",
+      "type": "azurerm_storage_account",
+      "name": "bad",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "after": {
+          "min_tls_version": "TLS1_0",
+          "https_traffic_only_enabled": false,
+          "allow_nested_items_to_be_public": true,
+          "shared_access_key_enabled": true
+        }
+      }
+    },
+    {
+      "address": "azurerm_cosmosdb_account.bad",
+      "type": "azurerm_cosmosdb_account",
+      "name": "bad",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "after": {
+          "local_authentication_enabled": true
+        }
+      }
+    },
+    {
+      "address": "azurerm_linux_function_app.bad",
+      "type": "azurerm_linux_function_app",
+      "name": "bad",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "after": {
+          "https_only": false
+        }
+      }
+    },
+    {
+      "address": "azurerm_role_assignment.bad",
+      "type": "azurerm_role_assignment",
+      "name": "bad",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "after": {
+          "role_definition_name": "Owner"
+        }
+      }
+    },
+    {
+      "address": "azurerm_management_group_policy_assignment.remediate",
+      "type": "azurerm_management_group_policy_assignment",
+      "name": "remediate",
+      "change": {
+        "actions": [
+          "create"
+        ],
+        "after": {
+          "identity": []
+        }
+      }
+    }
+  ]
+}

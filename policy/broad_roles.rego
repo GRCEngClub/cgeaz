@@ -1,5 +1,7 @@
 # Gate rule: no broad role grants sneak into governance code — not even yours,
 # not even at 2 AM with a deadline.
+# NIST SP 800-53 Rev.5: AC-6 (least privilege), AC-2 (account management).
+# CSF 2.0: PR.AA-05.
 package main
 
 import rego.v1

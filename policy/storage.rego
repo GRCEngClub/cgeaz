@@ -1,5 +1,7 @@
 # Gate rule: the pipeline's own storage must pass the pipeline's own standard.
 # Any storage account in a plan must disable public blob access and shared keys.
+# NIST SP 800-53 Rev.5: AC-3 (access enforcement), IA-5 (no shared keys), SC-28 (protection of data at rest).
+# CSF 2.0: PR.AA-05, PR.DS-01.
 package main
 
 import rego.v1

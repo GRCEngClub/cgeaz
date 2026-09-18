@@ -12,7 +12,18 @@ resource "azurerm_storage_account" "func_internal" {
   account_replication_type        = "LRS"
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
-  tags                            = local.common_tags
+
+  # Scratch account, but the same hygiene as the evidence account: recoverable deletes and
+  # short-lived SAS. Shared keys stay on only because the Functions runtime requires them.
+  blob_properties {
+    delete_retention_policy {
+      days = 7
+    }
+  }
+  sas_policy {
+    expiration_period = "01.00:00:00"
+  }
+  tags = local.common_tags
 }
 
 resource "azurerm_service_plan" "collectors" {
@@ -24,10 +35,21 @@ resource "azurerm_service_plan" "collectors" {
   tags                = local.common_tags
 }
 
+# Workspace-based Application Insights: without it a failed timer run leaves no exception trail.
+resource "azurerm_application_insights" "collectors" {
+  name                = "appi-grc-collectors-${random_string.suffix.result}"
+  resource_group_name = local.evidence_rg
+  location            = var.functions_location
+  workspace_id        = data.terraform_remote_state.foundation.outputs.log_analytics_workspace_id
+  application_type    = "web"
+  tags                = local.common_tags
+}
+
 resource "azurerm_linux_function_app" "collectors" {
   name                       = "func-grc-collectors-${random_string.suffix.result}"
   resource_group_name        = local.evidence_rg
   location                   = var.functions_location
+  https_only                 = true
   service_plan_id            = azurerm_service_plan.collectors.id
   storage_account_name       = azurerm_storage_account.func_internal.name
   storage_account_access_key = azurerm_storage_account.func_internal.primary_access_key
@@ -37,6 +59,7 @@ resource "azurerm_linux_function_app" "collectors" {
   }
 
   site_config {
+    application_insights_connection_string = azurerm_application_insights.collectors.connection_string
     application_stack {
       python_version = "3.11"
     }
@@ -49,6 +72,12 @@ resource "azurerm_linux_function_app" "collectors" {
     "DEFAULT_OWNER"                  = var.owner_email
     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "true"
     "ENABLE_ORYX_BUILD"              = "true"
+  }
+
+  # `az functionapp deployment source config-zip --build-remote` removes and re-adds this
+  # setting on every deploy; Terraform must not fight the deploy tooling over it.
+  lifecycle {
+    ignore_changes = [app_settings["ENABLE_ORYX_BUILD"]]
   }
 
   tags = local.common_tags

@@ -1,9 +1,10 @@
 """CGE-AZ pipeline — Stage 3 collector.
 
-Timer fires every 4 hours -> managed identity -> Defender assessments API -> Cosmos.
-One document per assessment per run, upserted on a deterministic ID so re-runs
-refresh instead of duplicate. Deliberately boring: if you can read this file,
-you can defend this pipeline's data lineage.
+Hourly timer -> managed identity -> Defender assessments API -> Cosmos.
+One document per assessment per resource per run, keyed on a deterministic ID that
+includes the run, so every sweep is kept and a retried write refreshes instead of
+duplicating. Each sweep also writes one ledger entry to the `runs` container. Deliberately
+boring: if you can read this file, you can defend this pipeline's data lineage.
 """
 
 import datetime
@@ -69,9 +70,10 @@ def build_document(
     status = props.get("status") or {}
     metadata = props.get("metadata") or {}
     resource_id = details.get("Id") or details.get("id", "")
-    # Deterministic ID: same assessment+resource upserts, never duplicates. Ownership is
-    # deliberately not part of it: a re-tag must refresh the record, not create a second one.
-    doc_id = hashlib.sha256(f"{assessment['name']}|{resource_id}".encode()).hexdigest()[:32]
+    # Deterministic ID: assessment + resource + run. A retried write of the same sweep upserts
+    # the same document; the next sweep gets new documents, so history is never overwritten.
+    # Ownership is deliberately not part of it: a re-tag must not fork a record.
+    doc_id = hashlib.sha256(f"{assessment['name']}|{resource_id}|{run_id}".encode()).hexdigest()[:32]
 
     resource_group = resource_group_of(resource_id)
     if resource_group:
@@ -102,7 +104,24 @@ def build_document(
     }
 
 
-def _collect() -> dict:
+def build_run_record(
+    run_id: str, subscription_id: str, collected_at: str, documents: int, unhealthy: int,
+    by_severity: dict[str, int], trigger: str,
+) -> dict:
+    """Ledger entry for one sweep: what ran, when, how it was started, and what it found."""
+    return {
+        "id": run_id,
+        "runId": run_id,
+        "subscriptionId": subscription_id,
+        "collectedAt": collected_at,
+        "trigger": trigger,
+        "documents": documents,
+        "unhealthy": unhealthy,
+        "unhealthyBySeverity": by_severity,
+    }
+
+
+def _collect(trigger: str) -> dict:
     subscription_id = os.environ["SUBSCRIPTION_ID"]
     cosmos_endpoint = os.environ["COSMOS_ENDPOINT"]
     database = os.environ["COSMOS_DATABASE"]
@@ -115,11 +134,9 @@ def _collect() -> dict:
     run_id = str(uuid.uuid4())
     collected_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-    container = (
-        CosmosClient(cosmos_endpoint, credential)
-        .get_database_client(database)
-        .get_container_client("assessments")
-    )
+    db = CosmosClient(cosmos_endpoint, credential).get_database_client(database)
+    container = db.get_container_client("assessments")
+    runs = db.get_container_client("runs")
 
     try:
         owners = resource_group_owners(token, subscription_id)
@@ -136,33 +153,40 @@ def _collect() -> dict:
         f"/providers/Microsoft.Security/assessments?api-version={API_VERSION}&$expand={EXPAND}"
     )
     written = 0
+    unhealthy = 0
+    by_severity: dict[str, int] = {}
     while url:
         resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=60)
         resp.raise_for_status()
         payload = resp.json()
 
         for assessment in payload.get("value", []):
-            container.upsert_item(
-                build_document(assessment, subscription_id, run_id, collected_at, owners, default_owner)
-            )
+            doc = build_document(assessment, subscription_id, run_id, collected_at, owners, default_owner)
+            container.upsert_item(doc)
             written += 1
+            if doc["status"] == "Unhealthy":
+                unhealthy += 1
+                severity = doc["severity"] or "Medium"
+                by_severity[severity] = by_severity.get(severity, 0) + 1
 
         url = payload.get("nextLink")
 
+    # Written last: a run with a ledger entry is a run whose documents are all present.
+    runs.upsert_item(build_run_record(run_id, subscription_id, collected_at, written, unhealthy, by_severity, trigger))
     logging.info("collection run %s complete: %d documents", run_id, written)
     return {"runId": run_id, "written": written, "collectedAt": collected_at}
 
 
-@app.timer_trigger(schedule="0 0 */4 * * *", arg_name="timer", run_on_startup=False)
-def collect_nightly(timer: func.TimerRequest) -> None:
-    """Sweep every 4 hours (00/04/08/12/16/20 UTC)."""
-    _collect()
+@app.timer_trigger(schedule="0 0 * * * *", arg_name="timer", run_on_startup=False)
+def collect_scheduled(timer: func.TimerRequest) -> None:
+    """Sweep at the top of every hour (UTC)."""
+    _collect("timer")
 
 
 @app.route(route="collect", auth_level=func.AuthLevel.FUNCTION)
 def collect_now(req: func.HttpRequest) -> func.HttpResponse:
     """Manual trigger for labs and demos: hit the endpoint, get the run summary."""
-    result = _collect()
+    result = _collect("manual")
     return func.HttpResponse(
         f"run {result['runId']}: {result['written']} documents at {result['collectedAt']}\n",
         status_code=200,

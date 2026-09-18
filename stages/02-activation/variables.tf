@@ -6,3 +6,13 @@ variable "baseline_plans" {
     KeyVaults       = "PerKeyVault"
   }
 }
+
+variable "subscription_id" {
+  description = "Subscription every resource in this stage is created in. Explicit, never inferred from whichever `az login` happens to be active."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$", var.subscription_id))
+    error_message = "subscription_id must be a subscription GUID."
+  }
+}

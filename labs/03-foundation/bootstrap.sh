@@ -29,6 +29,7 @@ az storage account create \
   --kind StorageV2 \
   --min-tls-version TLS1_2 \
   --allow-blob-public-access false \
+  --allow-shared-key-access false \
   --tags env=shared purpose=terraform-state owner="$OWNER" \
   --output none
 
@@ -37,13 +38,7 @@ az storage account blob-service-properties update \
   --account-name "$SA_NAME" \
   --resource-group "$RG_STATE" \
   --enable-versioning true \
-  --output none
-
-echo ">> State container: $CONTAINER"
-az storage container create \
-  --name "$CONTAINER" \
-  --account-name "$SA_NAME" \
-  --auth-mode login \
+  --enable-delete-retention true --delete-retention-days 7 \
   --output none
 
 # Terraform reads/writes state over the blob DATA plane (use_azuread_auth = true).
@@ -59,6 +54,19 @@ az role assignment create \
   --scope "/subscriptions/$SUB_ID/resourceGroups/$RG_STATE" \
   --output none 2>/dev/null || echo "   (already granted)"
 echo "   Note: a fresh role grant can take 1-2 minutes to propagate before terraform init works."
+
+# Shared keys are off, so even creating the container needs the data-plane role granted above.
+echo ">> State container: $CONTAINER (retries while the role grant propagates)"
+for attempt in 1 2 3 4 5 6; do
+  az storage container create --name "$CONTAINER" --account-name "$SA_NAME" --auth-mode login --output none 2>/dev/null && break
+  [ "$attempt" -eq 6 ] && { echo "container create still failing: wait a minute and re-run this script" >&2; exit 1; }
+  sleep 20
+done
+
+echo ">> Locking the state account against deletion"
+az lock create --name lock-tfstate-no-delete --lock-type CanNotDelete \
+  --resource-group "$RG_STATE" --resource-name "$SA_NAME" --resource-type Microsoft.Storage/storageAccounts \
+  --notes "Terraform state must not be deleted by accident" --output none
 
 BACKEND_FILE="$(dirname "$0")/backend.hcl"
 cat > "$BACKEND_FILE" <<EOF
