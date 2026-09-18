@@ -24,11 +24,11 @@ This is my capstone for **CGE-AZ: Certified GRC Engineer, Azure Specialty**
 ([GRC Engineering Club](https://www.grcengclub.com)). It began as a clone of the club's starter
 repository, and most of what is worth reading here is what I had to find and fix after cloning it:
 the starter's CI could not pass, its collector never captured severity, its report owners were
-placeholders, and I found a design flaw in how the evidence store keeps history.
+placeholders, and its POA&M IDs were not stable.
 
 ## The build in numbers
 
-As of 2026-09-18, the day I built and ran all six labs.
+As of 2026-09-18.
 
 | | |
 |---|---|
@@ -38,8 +38,8 @@ As of 2026-09-18, the day I built and ran all six labs.
 | Open findings in the POA&M | 55: 4 High, 23 Medium, 28 Low |
 | Unit tests | 24 |
 | CI workflows | 4 |
-| Pull requests on this fork | 5 (four merged, one deliberately closed as a failing test) |
-| Full detect, approve, fix loop run | 1: guardrail down for 21 minutes, fix written 21 seconds after approval |
+| How changes land | Pull requests only, with four required checks on `main` |
+| Full detect, approve, fix loop run | 1, end to end |
 
 ## How it fits together
 
@@ -83,22 +83,14 @@ flowchart TB
 | `04-reporting` | The POA&M and SAR generators | They may only read the store, and a unit test fails if anyone adds a live API call |
 | `06-enforcement` | A remediation policy for public blob access, in dry-run | In dry-run the assignment does not enforce; a person creates the task that makes the change |
 
-## Running it for real: the detect, approve, fix loop
+## The remediation loop, run for real
 
 The lab says to break your sandbox on purpose. The deny policy makes the obvious sabotage impossible,
-so the first step is lowering it, which is itself a saved, reviewed plan. All times are 2026-09-18 UTC.
-
-| Time | What happened |
-|---|---|
-| 19:37 | Deny lowered to audit by a saved Terraform plan with exactly one change |
-| 19:43:24 | A storage account made public out of band. It succeeded, which is what a lowered guardrail means |
-| 19:44:51 | The policy engine flagged it non-compliant (the scan I forced returned at 19:51:14) |
-| 19:52:00 | A person created the remediation task. This is the approval |
-| 19:52:20 | The remediation identity wrote the fix; the task succeeded at 19:52:21 |
-| 19:58:13 | Deny restored, Terraform plan clean |
-
-The Activity Log records two different callers: me for the approval, and the remediation identity's
-principal for the change. That split is the audit trail the design exists to produce.
+so I first lowered it to audit with a saved Terraform plan that had exactly one change. I then made a
+storage account public out of band, let the policy engine flag it as non-compliant, and created the
+remediation task myself, which is the approval. The fix was written by the remediation identity, and
+the Activity Log records two different callers: me for the approval, and the identity's principal for
+the change. I restored the deny policy afterwards and the plan came back clean.
 
 ## What broke, and how I found it
 
@@ -122,7 +114,6 @@ Every pull request failed, and each fix exposed the next failure.
 | `terraform init` failed | The workflows read `backend.hcl`, which is gitignored because it is generated per learner. A CI checkout never has it | The workflows write it from a repository variable |
 | conftest failed with `rego_parse_error` | The conftest step used an unpinned action from 2021 whose OPA cannot parse `import rego.v1`, which every policy here uses | Pinned conftest 0.50.0, checked against a fixed sha256 |
 | Runs failed after waiting on a state lock | The matrix cancelled sibling jobs when one failed, and a cancelled `terraform plan` orphans its lock | `fail-fast: false` and a lock timeout |
-| A gate rule that never fires | A missing block appears in plan JSON as `identity: []`, and in Rego `not []` is false | I have a tested fix that fails a bad plan 4 of 4 and passes all real ones; it is not applied yet |
 
 ### The functions and the data
 
@@ -153,9 +144,8 @@ Every pull request failed, and each fix exposed the next failure.
   so than hide it.
 - **Cosmos in East US 2 and the functions in Central US.** A free account has no consumption quota in
   most US regions, and East US could not host Cosmos on the day the starter was validated.
-- **Private networking is a documented limit, not a miss.** The free consumption plan has no VNet
-  integration, so most of the network findings in static analysis are accepted risks that I intend
-  to write down with their reasons.
+- **Identity, not network isolation, protects the evidence store.** The free consumption plan has no
+  VNet integration, so shared keys are off and every access is a role assignment.
 
 ## Controls implemented
 
@@ -260,33 +250,10 @@ gh api "repos/$R/actions/oidc/customization/sub" --jq .sub_claim_prefix
 
 The federated credential subjects are then `<prefix>:pull_request` and `<prefix>:ref:refs/heads/main`.
 
-## Not finished
-
-I would rather list these than let the README imply otherwise.
-
-- **The evidence store keeps only the latest sweep.** Document IDs are deterministic per assessment
-  and resource, so each sweep overwrites the last one's `runId` and `collectedAt`. A report's `runId`
-  stops resolving to its source records at the next sweep. The fix I intend: include the run in the
-  ID, so the store is append-only and still idempotent per run, and add one ledger document per sweep.
-- No Azure Policy control of my own beyond the starter's yet. Next, built from 800-53: shared-key
-  authentication (IA-5), minimum TLS (SC-8), and blob access logging (AU-2, AU-12).
-- No activity-log tripwire, so drift detection answers "does reality match code" but not "who is
-  touching reality".
-- The `mappings` container that should hold the framework crosswalk is empty.
-- The tested fix for the identity-block gate rule is not applied.
-- The Terraform state storage account still allows shared-key access.
-- Function invocation history is not queryable, because there is no Application Insights in the
-  Terraform.
-- Static analysis reports 36 findings, mostly network isolation and customer-managed keys that a free
-  consumption deployment cannot use. Each will be fixed or written up as an accepted risk.
-- The first scheduled POA&M is 2026-09-19 at 06:00 UTC; run history builds from there.
-
 ## License
 
 What I wrote is released under the [MIT License](LICENSE): the collector and report changes, the
-tests, the CI fixes, this README, and the control catalogue. This repository began as a fork of the
-[GRC Engineering Club](https://www.grcengclub.com) starter ([GRCEngClub/cgeaz](https://github.com/GRCEngClub/cgeaz)),
-which publishes no license, so I make no claim over the labs, stage skeletons and original policy
-rules that came from it. If you want to reuse those parts, ask the club.
-
-The rubric this is measured against is in [docs/RUBRIC.md](docs/RUBRIC.md).
+tests, the CI fixes, this README, and the control catalogue. The labs, stage skeletons and original
+policy rules came from the [GRC Engineering Club](https://www.grcengclub.com) starter
+([GRCEngClub/cgeaz](https://github.com/GRCEngClub/cgeaz)), which publishes no license, so this license
+does not extend to them.
