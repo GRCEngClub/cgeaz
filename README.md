@@ -1,152 +1,215 @@
-# CGE-AZ GRC Engineering Pipeline
+# An Azure GRC evidence pipeline, built and broken on a real subscription
 
-An automated GRC engineering pipeline on Azure: it **discovers** what is running, **activates**
-only what is missing, **stores immutable evidence** in a database the operator owns, **reports**
-from that store alone, and **enforces** through one least-privilege identity with a human at every
-escalation. Every control is code, every change is a reviewed pull request, and every report
-number traces back to a stored record.
+I wanted to test one idea: that compliance can run as a pipeline instead of a spreadsheet. On my own
+Azure subscription, a collector pulls Microsoft Defender's findings into a Cosmos DB that I own, two
+report generators turn that store into a POA&M and a SAR on timers, and an Azure Policy loop fixes
+drift through one least-privilege identity while a person approves each step. All of it is Terraform,
+every change was a pull request, and every claim in this README was checked against the running
+subscription.
 
 This is my capstone for **CGE-AZ: Certified GRC Engineer, Azure Specialty**
-([GRC Engineering Club](https://www.grcengclub.com)). It started from the club's starter
-repository ([GRCEngClub/cgeaz](https://github.com/GRCEngClub/cgeaz)) and has been extended and
-corrected since. The [changes](#what-i-changed-and-fixed) and the [controls](#controls-implemented)
-below say exactly what is mine and what came with the starter.
+([GRC Engineering Club](https://www.grcengclub.com)). It began as a clone of the club's starter
+repository, and most of what is worth reading here is what I had to find and fix after cloning it:
+the starter's CI could not pass, its collector never captured severity, its report owners were
+placeholders, and I found a design flaw in how the evidence store keeps history.
+
+## The build in numbers
+
+As of 2026-09-18, the day I built and ran all six labs.
+
+| | |
+|---|---|
+| Terraform stages, each with its own state | 5 |
+| Function Apps | 2: the collector runs every 4 hours; the POA&M runs daily at 06:00 UTC and the SAR weekly on Mondays |
+| Defender assessments per sweep | 101 (40 healthy, 55 unhealthy, 6 not applicable) |
+| Open findings in the POA&M | 55: 4 High, 23 Medium, 28 Low |
+| Unit tests | 24 |
+| CI workflows | 4 |
+| Pull requests on this fork | 5 (four merged, one deliberately closed as a failing test) |
+| Full detect, approve, fix loop run | 1: guardrail down for 21 minutes, fix written 21 seconds after approval |
+
+## How it fits together
+
+The interesting part is not the flow but who is allowed to do what. Four principals, four different
+permission sets, and no shared secret anywhere.
 
 ```mermaid
-flowchart LR
-    D["1 Discovery<br/>stage 02"] --> A["2 Activation<br/>stage 02"]
-    A --> E["3 Evidence store<br/>stage 03<br/>Cosmos + WORM Blob"]
-    E --> R["4 Reporting<br/>stage 04<br/>POA&M, SAR"]
-    R --> N["5 Narrative<br/>not built"]
-    E --> F["6 Enforcement<br/>stage 06<br/>Policy remediation"]
-    F -. "fix is re-collected" .-> E
+flowchart TB
+    DEF["Defender for Cloud<br/>assessments API"]
+    TAGS["Resource group<br/>owner tags"]
+    COL["Collector Function<br/>Security Reader<br/>every 4 hours"]
+    COS[("Cosmos DB<br/>assessments, frameworks, mappings")]
+    REP["Report Functions<br/>Cosmos read, Blob write<br/>POA&M daily, SAR weekly"]
+    WORM[("Blob container reports<br/>WORM, 90 days")]
+    POL["Azure Policy<br/>deny, audit, modify in dry-run"]
+    REM["Remediation identity<br/>Monitoring Contributor<br/>Storage Account Contributor"]
+    CI["GitHub Actions<br/>OIDC, plan only"]
+
+    DEF --> COL
+    TAGS --> COL
+    COL -- "Cosmos data contributor" --> COS
+    COS -- "read only" --> REP
+    REP -- "write, never overwrite" --> WORM
+    POL -- "remediation runs as" --> REM
+    CI -. "plan and conftest on every PR" .-> POL
 ```
 
-## Design rules
+- The collector can read Defender and write evidence, and can do nothing else.
+- The reporter can read evidence and write reports, and cannot write evidence or read Defender.
+- The remediation identity is the only thing that changes resources, and only storage settings under
+  one management group.
+- CI can plan and evaluate; it cannot apply.
 
-- **Discovers first, then acts.** Stage 02 reads what exists and enables only the measured gap.
-- **Collect once.** One assessment sweep serves every framework through a crosswalk held as data.
-- **Reports read the evidence store only.** No report generator calls a live platform API, and a
-  unit test guards that in the source.
-- **Zero stored credentials.** Managed identities inside Azure, OIDC federation in CI, shared keys
-  disabled on the evidence storage. No secret exists anywhere in this repository.
-- **Separation of duties.** The collector, the reporter and the remediation identity are three
-  different principals with three different role sets.
-- **Automation acts; humans authorize.** Escalation (audit, dry-run, enforce) is a reviewed
-  parameter change, and in dry-run a person creates the remediation task.
-- **Changes go through the repository.** Drift detection watches for anything that does not.
+## What I built, stage by stage
 
-## What is deployed
-
-| Stage | What it is | State |
+| Stage | What is deployed | Choices that were mine to make |
 |---|---|---|
-| `01-foundation` | Management group hierarchy, Log Analytics, baseline policy initiative, remediation identity | applied |
-| `02-activation` | Defender plan baseline driven by discovery, NIST CSF 2.0 initiative assignment | applied |
-| `03-evidence-store` | Cosmos DB, WORM blob container, collector Function (every 4 hours) | applied |
-| `04-reporting` | POA&M generator (daily 06:00 UTC), SAR generator (weekly, Monday 07:00 UTC) | applied |
-| `06-enforcement` | Public-blob remediation policy in **dry-run** | applied |
-| `05` narrative | Optional AI digest | not built |
+| `01-foundation` | Management group hierarchy, Log Analytics, a baseline policy initiative, the remediation identity | The deny policy has a reviewed variable for its effect, so lowering it is a plan someone reads |
+| `02-activation` | Defender plan baseline (Storage and Key Vaults, on top of free posture management) and the NIST CSF 2.0 initiative | Discovery reads the tier of every plan first and reports the gap; it never touches a plan outside the baseline |
+| `03-evidence-store` | Cosmos DB in East US 2, a WORM blob container, the collector in Central US | Shared keys are off, so the evidence storage accepts identity or nothing |
+| `04-reporting` | The POA&M and SAR generators | They may only read the store, and a unit test fails if anyone adds a live API call |
+| `06-enforcement` | A remediation policy for public blob access, in dry-run | In dry-run the assignment does not enforce; a person creates the task that makes the change |
 
-## What I changed and fixed
+## Running it for real: the detect, approve, fix loop
 
-Numbers are pull requests on this fork. Each was gated by CI before it merged.
+The lab says to break your sandbox on purpose. The deny policy makes the obvious sabotage impossible,
+so the first step is lowering it, which is itself a saved, reviewed plan. All times are 2026-09-18 UTC.
 
-1. **CI could not pass as shipped** ([#1](https://github.com/leeclay95/cgeaz/pull/1)). Three separate causes, each
-   reproduced from the run logs:
-   - `terraform init` in CI reads `labs/03-foundation/backend.hcl`, which is gitignored (it is
-     generated per learner), so every stage failed at init on every pull request. Both workflows now
-     write it from the `STATE_STORAGE_ACCOUNT` repository variable.
-   - The conftest step used `instrumenta/conftest-action@master`, unpinned and last updated in 2021.
-     Its bundled OPA cannot parse `import rego.v1`, which every file in `policy/` uses, so no change
-     could ever pass. It now runs conftest 0.50.0, downloaded and checked against a pinned sha256.
-   - The stage matrix cancelled sibling jobs when one failed. Cancelling `terraform plan` mid-run
-     orphans the remote state lock, and the next run then waits out its lock timeout and fails.
-     The matrix now sets `fail-fast: false` and plans use `-lock-timeout=5m`.
-2. **Severity was never collected** ([#3](https://github.com/leeclay95/cgeaz/pull/3)). The Defender assessments list
-   returns no `metadata` unless asked to expand it, so every stored document had `severity = null`,
-   the POA&M would have rated every finding Medium with a 90-day deadline, and the SAR would have said
-   "Unknown". Both reports are written to an immutable container, so a wrong report stays wrong for 90
-   days. The collector now requests `$expand=metadata`, and on the live data the stored severities
-   match the API exactly (High 20, Medium 32, Low 49).
-3. **The POA&M owner column was a placeholder** ([#4](https://github.com/leeclay95/cgeaz/pull/4)). Ownership is
-   now stamped on each finding at collection time, because reports may only read the store.
-   A resource group's `owner` tag is used; a group with no tag is reported as unassigned rather than
-   given a default; subscription-level findings take a platform owner set from Terraform. The
-   collector needs no new permission.
-4. **POA&M IDs were not stable** ([#4](https://github.com/leeclay95/cgeaz/pull/4)). Findings were sorted by severity as
-   text (High, Low, Medium) and the ID is the position in that order, which Cosmos does not guarantee,
-   so an ID could land on a different finding when a report was regenerated. Severity is now ranked
-   with a deterministic tie-break.
-5. **Tests where there were none.** 24 unit tests (`tests/`) cover the evidence path: deterministic
-   document IDs, run lineage on every document, null-safe parsing, pagination, owner resolution, the
-   no-overwrite contract for the immutable container, and the store-only rule. They run in CI on every
-   relevant pull request and nightly.
-6. **Smaller fixes.** The state resource group is now tagged with an owner by `bootstrap.sh`; lab
-   evidence files (which hold subscription IDs) are gitignored by pattern; the collector schedule that
-   was changed in Azure is now in the repository; provider lock files carry the CI platform checksums.
+| Time | What happened |
+|---|---|
+| 19:37 | Deny lowered to audit by a saved Terraform plan with exactly one change |
+| 19:43:24 | A storage account made public out of band. It succeeded, which is what a lowered guardrail means |
+| 19:44:51 | The policy engine flagged it non-compliant (the scan I forced returned at 19:51:14) |
+| 19:52:00 | A person created the remediation task. This is the approval |
+| 19:52:20 | The remediation identity wrote the fix; the task succeeded at 19:52:21 |
+| 19:58:13 | Deny restored, Terraform plan clean |
+
+The Activity Log records two different callers: me for the approval, and the remediation identity's
+principal for the change. That split is the audit trail the design exists to produce.
+
+## What broke, and how I found it
+
+Most of the value is in the debugging. Each row was reproduced before I changed anything.
+
+### My workstation (Kali, a rolling release)
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `az provider register` crashed with `No module named azure.mgmt.resource.resources.v2024_11_01` | A system-wide `pip install` of the Azure SDK had replaced the `azure-mgmt-resource` that the packaged `azure-cli` needs. Azure is a namespace package, so whichever version lands in site-packages wins | Azure CLI 2.90 in its own virtual environment, linked ahead on `PATH` |
+| A day later, `No module named 'azure'` | The distro moved `python3` from 3.13 to 3.14. A venv symlinks to the system interpreter, so it followed and lost its packages | Pinned the venv to `/usr/bin/python3.13` |
+| Terraform state locked, three separate times | A killed apply; a CI job cancelled mid-plan; and `terraform plan \| head`, which closes the pipe early and kills Terraform before it releases the lock | `terraform force-unlock` after confirming nothing was running. The rule I keep now: never pipe Terraform into `head` |
+
+### The CI, which could not pass as shipped ([#1](https://github.com/leeclay95/cgeaz/pull/1))
+
+Every pull request failed, and each fix exposed the next failure.
+
+| Failure | Cause | Fix |
+|---|---|---|
+| Login failed with `AADSTS700213` | This repository emits an immutable OIDC subject that embeds the owner and repository IDs. The arming script creates the classic subject, so no credential ever matched | Updated both federated credentials to the ID-based subjects. Propagation across Entra takes minutes, so an early retry can still fail |
+| `terraform init` failed | The workflows read `backend.hcl`, which is gitignored because it is generated per learner. A CI checkout never has it | The workflows write it from a repository variable |
+| conftest failed with `rego_parse_error` | The conftest step used an unpinned action from 2021 whose OPA cannot parse `import rego.v1`, which every policy here uses | Pinned conftest 0.50.0, checked against a fixed sha256 |
+| Runs failed after waiting on a state lock | The matrix cancelled sibling jobs when one failed, and a cancelled `terraform plan` orphans its lock | `fail-fast: false` and a lock timeout |
+| A gate rule that never fires | A missing block appears in plan JSON as `identity: []`, and in Rego `not []` is false | I have a tested fix that fails a bad plan 4 of 4 and passes all real ones; it is not applied yet |
+
+### The functions and the data
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| The report endpoints returned an empty HTTP 500 | On the second call in a UTC day the upload hits `BlobAlreadyExists`: the path is dated, nothing overwrites, and the container is immutable. A Linux Consumption app has no log stream, so I added Application Insights and read the exception | It is the immutability contract working. It also means a manual call collides with the timers, so I let the timers produce the reports |
+| A changed schedule did not take effect after a deploy | A Python v2 Function App does not resync its trigger metadata after a zip deploy | Force `syncfunctiontriggers` |
+| Every stored finding had `severity = null` ([#3](https://github.com/leeclay95/cgeaz/pull/3)) | The assessments list returns no metadata unless the request adds `$expand=metadata`. The POA&M would have rated everything Medium with a 90-day deadline, in an immutable file | Request the expansion. Stored severities now match the API exactly |
+| The POA&M owner column was placeholder text ([#4](https://github.com/leeclay95/cgeaz/pull/4)) | The starter never resolved owners | Stamp the owner on each finding at collection time |
+| POA&M IDs could change on regeneration | Severity was sorted as text (High, Low, Medium), the ID is the position in that order, and Cosmos does not guarantee query order | Rank severity and add a stable tie-break |
+| Cosmos rejected `GROUP BY` | Cross-partition aggregates only work as `SELECT VALUE` | One `VALUE COUNT` per value |
+
+## Decisions, and why
+
+- **Ownership is stamped when evidence is collected, not looked up when a report renders.** Reports
+  may only read the store, so the owner has to already be there. A resource group with no owner tag
+  is reported as *unassigned* rather than given a default, because a hidden gap is worse than a
+  visible one. Subscription-level findings have no group to carry a tag, so they take a platform
+  owner set from Terraform.
+- **No new permission for that.** Security Reader already includes reading resource groups, so the
+  collector is exactly as narrow as before.
+- **The collector runs every 4 hours** for a fresher store and a denser run history. It does not
+  speed up Defender: its first assessment cycle had landed by about six hours after I enabled the plan.
+- **Conftest is pinned by checksum** instead of using a marketplace action, because that step runs
+  in a job that holds cloud credentials.
+- **`enforce_admins` is off on `main`.** It is a one-person repository and I did not want CI breaking
+  to lock me out. The cost is that the owner can bypass the required checks, and I would rather say
+  so than hide it.
+- **Cosmos in East US 2 and the functions in Central US.** A free account has no consumption quota in
+  most US regions, and East US could not host Cosmos on the day the starter was validated.
+- **Private networking is a documented limit, not a miss.** The free consumption plan has no VNet
+  integration, so most of the network findings in static analysis are accepted risks that I intend
+  to write down with their reasons.
 
 ## Controls implemented
 
-Every component below is deployed. The full catalogue, with the reasoning for each, is in
-[docs/CONTROLS.md](docs/CONTROLS.md). NIST SP 800-53 Rev. 5 identifiers are the controls a component
-implements or supports; the CSF 2.0 column is the crosswalk the rubric grades.
+Every row is deployed. [docs/CONTROLS.md](docs/CONTROLS.md) has the full catalogue, the reasoning, and
+a blast-radius and rollback table for each enforcement policy. NIST SP 800-53 Rev. 5 identifiers are
+the controls a component implements or supports; the CSF 2.0 column is the crosswalk the rubric grades.
 
 | Control | Effect | 800-53 Rev. 5 | CSF 2.0 |
 |---|---|---|---|
 | `cge-deny-public-blob` | Deny public blob access at the API | AC-3, AC-4, SC-7 | PR.DS |
 | `cge-require-env-tag-rg` | Audit resource groups without an `env` tag | CM-8 | ID.AM |
 | `cge-dine-storage-diagnostics` | Deploy diagnostic settings if missing | AU-2, AU-12 | PR.PS, DE.CM |
-| `cge-fix-public-blob` | Modify (dry-run): remediate public access via one identity | CM-6, AC-3 | PR.DS, RS.MI |
-| Remediation identity | One named, whitelisted user-assigned identity | AC-2, AC-6 | PR.AA, GV.RR |
-| WORM policy on `reports` | 90-day immutability, proven by a failed delete | AU-9, AU-11, SI-7 | PR.DS |
-| Shared keys disabled on evidence storage | Entra identity or nothing | IA-5, AC-3, AC-6 | PR.AA |
-| Collector and reporter identities | Different principals, different roles | AC-5, AC-6 | PR.AA, GV.RR |
-| Owner stamping (added) | Every finding carries an accountable owner | CM-8(4), CA-5 | ID.AM, GV.RR |
-| Store-only reporting (guarded by test) | Report numbers reproducible from a stored query | AU-7 | ID.RA, GV.OV |
-| Compliance gate (conftest) | Unmergeable: public blob access, shared keys, Owner/Contributor grants (the identity-block rule is a [known gap](#known-gaps)) | CM-3, CM-4 | ID.IM, PR.PS |
-| Drift detection (scheduled plan) | Does reality match code | CM-2, CM-3, CM-6 | DE.CM |
-| Branch protection | Four required gate checks on `main` | CM-3, CM-5 | PR.PS |
+| `cge-fix-public-blob` | Modify in dry-run, through one identity | CM-6, AC-3 | PR.DS, RS.MI |
+| Remediation identity | One named, whitelisted, user-assigned identity | AC-2, AC-6 | PR.AA, GV.RR |
+| WORM on `reports` | 90-day immutability, proven by a failed delete | AU-9, AU-11, SI-7 | PR.DS |
+| Shared keys off on evidence storage | Entra identity or nothing | IA-5, AC-3, AC-6 | PR.AA |
+| Collector and reporter split | Different principals, different roles | AC-5, AC-6 | PR.AA, GV.RR |
+| Owner stamping (mine) | Every finding has an accountable owner | CM-8(4), CA-5 | ID.AM, GV.RR |
+| Store-only reporting | Every report number reproducible from a stored query | AU-7 | ID.RA, GV.OV |
+| Compliance gate | Unmergeable: public blob, shared keys, Owner or Contributor grants | CM-3, CM-4 | ID.IM, PR.PS |
+| Drift detection | Does reality match code, nightly | CM-2, CM-3, CM-6 | DE.CM |
+| Branch protection | Four required checks on `main` | CM-3, CM-5 | PR.PS |
 
-### Proven end to end
+## Evidence you can check yourself
 
-- **Detect, approve, fix, re-escalate.** With the deny policy lowered to audit through a saved
-  Terraform plan, a storage account was made public out of band, the compliance scan flagged it
-  non-compliant, a person created the remediation task, and the fix was written by the remediation
-  identity and not by a human (the Activity Log shows two different callers). The deny policy was then
-  restored.
-- **The gate blocks a bad change.** [Pull request #2](https://github.com/leeclay95/cgeaz/pull/2) added a
-  public, shared-key storage account. Its `gate (06-enforcement)` check failed at conftest, naming the
-  rule and the resource; the other stages passed. It was closed unmerged.
-- **Every number traces to a record.** On the live data the evidence store and the Defender API agree
-  on every status count, and a single finding was traced field by field from Defender to its stored
-  document, including its `runId` and `collectedAt`.
-- **WORM.** Deleting a stored artifact fails with `BlobImmutableDueToPolicy`, for every identity.
-- **Idempotent collection.** Repeated sweeps refresh documents in place; the container holds one
-  document per assessment and resource.
+- **The gate blocks a bad change.** [Pull request #2](https://github.com/leeclay95/cgeaz/pull/2) adds a public,
+  shared-key storage account. Its `gate (06-enforcement)` check fails at conftest and names the rule
+  and the resource; the other three pass; it was closed unmerged. The Actions history therefore
+  includes three failed gate runs: two are the CI defects above and one is this deliberate block.
+- **A stored number traces to the live source.** After a sweep, the status counts in the store equal
+  the Defender API's, and one finding traced field by field, including its `runId` and `collectedAt`.
+- **Nothing in the evidence container can be deleted.** This fails with `BlobImmutableDueToPolicy`:
 
-The Actions history shows three failed gate runs. Two are the CI defects fixed in #1; the third is the
-deliberate block on pull request #2.
+```bash
+EVIDENCE_SA=$(cd stages/03-evidence-store && terraform output -raw evidence_storage_account)
+BLOB=$(az storage blob list --account-name "$EVIDENCE_SA" --container-name reports --auth-mode login --query "[0].name" -o tsv)
+az storage blob delete --account-name "$EVIDENCE_SA" --container-name reports --name "$BLOB" --auth-mode login
+```
 
-## Deploy from an empty subscription
+- **The tests and the repository's own check:**
 
-Prerequisites: an Azure subscription you own, Azure CLI 2.90 or later, Terraform 1.9 or later,
-Python 3.11 or later, `conftest`, and `gh` for the CI arming step. [docs/SETUP.md](docs/SETUP.md)
-covers the account, the eight resource providers to register, regional quotas, and cost guardrails.
-Do it first; the quota probe matters more than it looks.
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r functions/collect_assessments/requirements.txt -r functions/reports/requirements.txt pytest
+.venv/bin/pytest tests -q
+./self-check.sh
+```
+
+## Reproduce it from an empty subscription
+
+You need an Azure subscription you own, Azure CLI 2.90 or later, Terraform 1.9 or later, Python 3.11 or
+later, `conftest`, and `gh` for the CI step. [docs/SETUP.md](docs/SETUP.md) covers the account, the eight
+resource providers to register, regional quotas and cost guardrails. Run the quota probe before you
+start; it decides where your functions can live. On a rolling-release distro, pin your virtual
+environments to an exact interpreter.
 
 | Order | What | Where |
 |---|---|---|
-| 1 | Sandbox: management groups, tagged resource group, auditor group, budget | [labs/01-sandbox](labs/01-sandbox) |
+| 1 | Management groups, tagged resource group, auditor group, budget | [labs/01-sandbox](labs/01-sandbox) |
 | 2 | Defender plan, CSF 2.0 assignment, Log Analytics and Activity Log routing, seed storage | [labs/02-toolkit](labs/02-toolkit) |
-| 3 | Remote state (`bootstrap.sh`), then adopt and apply the foundation | [labs/03-foundation](labs/03-foundation), `stages/01-foundation` |
+| 3 | Remote state with `bootstrap.sh`, then adopt and apply the foundation | [labs/03-foundation](labs/03-foundation), `stages/01-foundation` |
 | 4 | Activation | `stages/02-activation` |
 | 5 | Evidence store, then deploy the collector | [labs/04-evidence](labs/04-evidence), `stages/03-evidence-store` |
 | 6 | Reporting, then deploy the report generators | [labs/05-reports](labs/05-reports), `stages/04-reporting` |
 | 7 | Enforcement in dry-run, then arm CI | [labs/06-loop](labs/06-loop), `stages/06-enforcement` |
 
-Every stage is its own Terraform root module with its own state, applied the same way. Read the
-plan before you apply it, and write plans to a file: piping `terraform plan` into `head` closes the
-pipe early, kills Terraform mid-run, and leaves the state locked.
+Every stage is applied the same way: read the plan, and write it to a file first.
 
 ```bash
 export ARM_SUBSCRIPTION_ID=$(az account show --query id -o tsv)
@@ -160,8 +223,7 @@ less plan.txt
 terraform apply stage.plan
 ```
 
-Function code is deployed as a zip with a remote build. On a Linux Consumption Python v2 app a deploy
-does not always refresh the trigger list, so force a sync afterwards:
+Function code goes up as a zip with a remote build, and the trigger list needs a nudge afterwards:
 
 ```bash
 cd functions/collect_assessments
@@ -174,72 +236,37 @@ SUB=$(az account show --query id -o tsv)
 az rest --method POST --url "https://management.azure.com/subscriptions/$SUB/resourceGroups/rg-grc-evidence-dev/providers/Microsoft.Web/sites/$APP/syncfunctiontriggers?api-version=2023-12-01"
 ```
 
-### Arming CI on your fork
-
-CI authenticates to Azure with OIDC federation and stores no secret. `labs/06-loop/arm-your-fork.sh`
-creates the app registration, then you add its five values as repository **variables**. If your
-repository uses immutable OIDC subject claims (the current default for new repositories), the
-federated credentials it creates will not match what GitHub sends and login fails with
-`AADSTS700213`. Read the exact prefix and use it as the credential subject:
+**Arming CI.** `labs/06-loop/arm-your-fork.sh` creates the app registration; you add its five values as
+repository variables. If your repository uses immutable OIDC subjects, the credentials it creates will
+not match what GitHub sends. Read your prefix and use it as the subject:
 
 ```bash
 R=your-github-user/cgeaz
 gh api "repos/$R/actions/oidc/customization/sub" --jq .sub_claim_prefix
 ```
 
-Federated credential subjects are then `<prefix>:pull_request` and `<prefix>:ref:refs/heads/main`.
-Changes to a federated credential can take about ten minutes to reach every Entra replica, so a
-retry shortly after an edit can still fail.
+The federated credential subjects are then `<prefix>:pull_request` and `<prefix>:ref:refs/heads/main`.
 
-## Running the tests
+## Not finished
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install -r functions/collect_assessments/requirements.txt -r functions/reports/requirements.txt pytest
-.venv/bin/pytest tests -q
-./self-check.sh
-```
+I would rather list these than let the README imply otherwise.
 
-## How the repository protects itself
-
-| Workflow | Trigger | What it does |
-|---|---|---|
-| `compliance-gate` | pull request | Terraform validate and plan for four stages, then conftest on each plan. Required on `main`. |
-| `drift-detection` | nightly 08:00 UTC | `terraform plan -detailed-exitcode` for four stages; opens an issue on drift. |
-| `unit-tests` | pull request and nightly | Runs the 24 unit tests, no cloud credentials. |
-| `guide-ci` | pull request and nightly | Parses every code block and checks every relative link in the guides. |
-
-## Layout
-
-```
-stages/     one directory per pipeline stage, each a Terraform root module with its own state
-functions/  the collector and the report generators (Python, timer-triggered, managed identity)
-tests/      unit tests for the evidence path
-policy/     OPA rules that gate this repository's own changes
-labs/       the lab guides and helper scripts
-docs/       setup, control catalogue, rubric, validation log
-.github/    the compliance gate, drift detection, unit tests and guide checks
-```
-
-## Known gaps
-
-Not built yet, so not claimed above:
-
-- No Azure Policy control of my own beyond the starter's. The next ones are built from 800-53:
-  shared-key authentication (IA-5), minimum TLS (SC-8), and blob access logging (AU-2, AU-12).
-- No activity-log tripwire for "who is touching reality"; drift detection currently answers only
-  "does reality match code".
-- The `mappings` container that holds the framework crosswalk is not yet populated.
-- `policy_identity.rego` never fires: a missing block appears in plan JSON as `identity: []`, and in
-  Rego `not []` is false. A tested fix exists and is not yet applied.
+- **The evidence store keeps only the latest sweep.** Document IDs are deterministic per assessment
+  and resource, so each sweep overwrites the last one's `runId` and `collectedAt`. A report's `runId`
+  stops resolving to its source records at the next sweep. The fix I intend: include the run in the
+  ID, so the store is append-only and still idempotent per run, and add one ledger document per sweep.
+- No Azure Policy control of my own beyond the starter's yet. Next, built from 800-53: shared-key
+  authentication (IA-5), minimum TLS (SC-8), and blob access logging (AU-2, AU-12).
+- No activity-log tripwire, so drift detection answers "does reality match code" but not "who is
+  touching reality".
+- The `mappings` container that should hold the framework crosswalk is empty.
+- The tested fix for the identity-block gate rule is not applied.
 - The Terraform state storage account still allows shared-key access.
-- Function invocation history is not queryable (no Application Insights).
-- Static analysis (`checkov`) reports findings, mostly network isolation and customer-managed keys
-  that a free-tier consumption deployment cannot use; each will be fixed or documented as an
-  accepted risk.
-- The pipeline's run history began on 2026-09-18 and accumulates from there.
+- Function invocation history is not queryable, because there is no Application Insights in the
+  Terraform.
+- Static analysis reports 36 findings, mostly network isolation and customer-managed keys that a free
+  consumption deployment cannot use. Each will be fixed or written up as an accepted risk.
+- The first scheduled POA&M is 2026-09-19 at 06:00 UTC; run history builds from there.
 
-## Credits
-
-The starter, the labs and the course are by the [GRC Engineering Club](https://www.grcengclub.com).
-The rubric this repository is measured against is in [docs/RUBRIC.md](docs/RUBRIC.md).
+The starter, the labs and the course are by the [GRC Engineering Club](https://www.grcengclub.com), and
+the rubric this is measured against is in [docs/RUBRIC.md](docs/RUBRIC.md).
