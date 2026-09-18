@@ -43,6 +43,16 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      # backend.hcl is gitignored (bootstrap.sh writes it per learner), so a CI checkout
+      # never has it; rebuild it from the repository variable before init.
+      - name: write backend config
+        run: |
+          cat > labs/03-foundation/backend.hcl <<EOF
+          resource_group_name  = "rg-grc-tfstate"
+          storage_account_name = "${TF_VAR_state_storage_account}"
+          container_name       = "tfstate"
+          EOF
+
       - name: terraform validate + plan
         working-directory: stages/${{ matrix.stage }}
         run: |
