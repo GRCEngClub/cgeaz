@@ -28,7 +28,7 @@ jobs:
           python-version: "3.11"
 
       - name: install
-        run: pip install -r functions/collect_assessments/requirements.txt pytest
+        run: pip install -r functions/collect_assessments/requirements.txt -r functions/reports/requirements.txt pytest
 
       - name: pytest
         run: pytest tests -q

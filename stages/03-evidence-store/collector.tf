@@ -46,6 +46,7 @@ resource "azurerm_linux_function_app" "collectors" {
     "COSMOS_ENDPOINT"                = azurerm_cosmosdb_account.evidence.endpoint
     "COSMOS_DATABASE"                = azurerm_cosmosdb_sql_database.grc.name
     "SUBSCRIPTION_ID"                = local.subscription
+    "DEFAULT_OWNER"                  = var.owner_email
     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "true"
     "ENABLE_ORYX_BUILD"              = "true"
   }

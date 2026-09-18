@@ -85,6 +85,7 @@ completes, and a second `terraform plan` says `No changes.` — the convergence 
 cd ../../stages/03-evidence-store
 terraform init -backend-config=../../labs/03-foundation/backend.hcl
 export TF_VAR_state_storage_account=$(grep storage_account_name ../../labs/03-foundation/backend.hcl | cut -d'"' -f2)   # read from backend.hcl, no manual substitution
+export TF_VAR_owner_email=you@example.com   # the same address as Lab 1's owner tag; owns subscription-level findings in the POA&M
 terraform plan   # count the custody chain: Cosmos + 3 containers, WORM container,
                  # keyless storage, collector app, two scoped role grants
 terraform apply  # Cosmos takes a few minutes — read the collector code while you wait

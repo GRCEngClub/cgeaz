@@ -10,6 +10,7 @@ import datetime
 import hashlib
 import logging
 import os
+import re
 import uuid
 
 import azure.functions as func
@@ -23,17 +24,66 @@ ARM = "https://management.azure.com"
 API_VERSION = "2021-06-01"
 # The list call returns no `metadata`, and so no severity, unless it is asked to expand it.
 EXPAND = "metadata"
+RG_API_VERSION = "2021-04-01"
+_RESOURCE_GROUP = re.compile(r"/resourcegroups/([^/]+)", re.IGNORECASE)
 
 
-def build_document(assessment: dict, subscription_id: str, run_id: str, collected_at: str) -> dict:
+def resource_group_of(resource_id: str) -> str | None:
+    """Resource group named in an ARM resource ID, or None for subscription-level resources."""
+    match = _RESOURCE_GROUP.search(resource_id or "")
+    return match.group(1) if match else None
+
+
+def resource_group_owners(token: str, subscription_id: str) -> dict[str, str]:
+    """Resource group name (lower-cased) -> its `owner` tag. Groups without the tag are omitted.
+
+    Reports read only from the evidence store, so ownership has to be captured here, at
+    collection time, and stamped on each document. Security Reader already includes
+    Microsoft.Resources/subscriptions/resourceGroups/read: no new permission is needed.
+    """
+    owners: dict[str, str] = {}
+    url = f"{ARM}/subscriptions/{subscription_id}/resourcegroups?api-version={RG_API_VERSION}"
+    while url:
+        resp = requests.get(url, headers={"Authorization": f"Bearer {token}"}, timeout=60)
+        resp.raise_for_status()
+        payload = resp.json()
+        for group in payload.get("value", []):
+            owner = (group.get("tags") or {}).get("owner")
+            if owner:
+                owners[group["name"].lower()] = owner
+        url = payload.get("nextLink")
+    return owners
+
+
+def build_document(
+    assessment: dict,
+    subscription_id: str,
+    run_id: str,
+    collected_at: str,
+    owners: dict[str, str] | None = None,
+    default_owner: str | None = None,
+) -> dict:
     """Map one Defender assessment to its evidence document. Pure (no I/O) so it is unit-tested."""
     props = assessment.get("properties") or {}
     details = props.get("resourceDetails") or {}
     status = props.get("status") or {}
     metadata = props.get("metadata") or {}
     resource_id = details.get("Id") or details.get("id", "")
-    # Deterministic ID: same assessment+resource upserts, never duplicates.
+    # Deterministic ID: same assessment+resource upserts, never duplicates. Ownership is
+    # deliberately not part of it: a re-tag must refresh the record, not create a second one.
     doc_id = hashlib.sha256(f"{assessment['name']}|{resource_id}".encode()).hexdigest()[:32]
+
+    resource_group = resource_group_of(resource_id)
+    if resource_group:
+        owner = (owners or {}).get(resource_group.lower())
+        # A group with no owner tag stays visibly unassigned: that is a tagging gap to fix,
+        # not something to paper over with a default.
+        owner_source = "resource-group-tag" if owner else "unassigned"
+    elif default_owner:
+        owner, owner_source = default_owner, "subscription-default"
+    else:
+        owner, owner_source = None, "unassigned"
+
     return {
         "id": doc_id,
         "subscriptionId": subscription_id,
@@ -44,6 +94,9 @@ def build_document(assessment: dict, subscription_id: str, run_id: str, collecte
         "severity": metadata.get("severity"),
         "categories": metadata.get("categories"),
         "resourceId": resource_id,
+        "resourceGroup": resource_group,
+        "owner": owner,
+        "ownerSource": owner_source,
         "collectedAt": collected_at,
         "runId": run_id,
     }
@@ -68,6 +121,16 @@ def _collect() -> dict:
         .get_container_client("assessments")
     )
 
+    try:
+        owners = resource_group_owners(token, subscription_id)
+    except requests.RequestException:
+        # Ownership is enrichment. Losing it must not cost the sweep its evidence, but it must
+        # not be silent either: every affected document is stamped ownerSource=unassigned.
+        logging.exception("could not read resource group tags; findings will be unassigned")
+        owners = {}
+    # Subscription-level findings have no resource group to carry a tag.
+    default_owner = os.environ.get("DEFAULT_OWNER")
+
     url = (
         f"{ARM}/subscriptions/{subscription_id}"
         f"/providers/Microsoft.Security/assessments?api-version={API_VERSION}&$expand={EXPAND}"
@@ -79,7 +142,9 @@ def _collect() -> dict:
         payload = resp.json()
 
         for assessment in payload.get("value", []):
-            container.upsert_item(build_document(assessment, subscription_id, run_id, collected_at))
+            container.upsert_item(
+                build_document(assessment, subscription_id, run_id, collected_at, owners, default_owner)
+            )
             written += 1
 
         url = payload.get("nextLink")
