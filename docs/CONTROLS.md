@@ -16,7 +16,7 @@ Only components that exist in the code appear here.
 
 | Component | What it does | 800-53 Rev. 5 | CSF 2.0 |
 |---|---|---|---|
-| Management group hierarchy + initiative assignment | Controls inherit to every current and future subscription: compliance by design | CM-2, CM-6 | GV.PO, GV.OC |
+| Management group hierarchy + `cge-grc-baseline` initiative assignment | Controls inherit to every current and future subscription: compliance by design | CM-2, CM-6 | GV.PO, GV.OC |
 | `cge-require-env-tag-rg` (Audit) | Inventory hygiene; ownership accountability feeds the POA&M | CM-8 | ID.AM |
 | `cge-deny-public-blob` (Deny) | Prevents public blob exposure at the API, before the resource exists | AC-3, AC-4, SC-7 | PR.DS |
 | `cge-dine-storage-diagnostics` (DeployIfNotExists) | Logging that enforces its own coverage | AU-2, AU-12 | PR.PS, DE.CM |
