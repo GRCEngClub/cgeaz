@@ -15,7 +15,10 @@
 # Vault with no secrets in it, a VNet and NSG (free), a user-assigned identity (free).
 # No VMs, no public IPs, no Cosmos. The Lab 1 budget alert is still watching.
 #
-# Run it after Lab 6, before you start the capstone build. If your foundation's
+# Run it after Lab 6, before you start the capstone build. Free accounts often have
+# zero F1 App Service quota in eastus (same pattern as Y1 in Lab 4): set
+# SEED_APP_LOCATION=centralus (or another region) if the plan create fails on quota.
+# If your foundation's
 # deny-public-blob policy is still at Deny, the one public-blob misconfiguration is
 # refused by policy — that is the control working, and the script says so.
 #
@@ -121,24 +124,26 @@ az group create --name "$RG_LEGACY" --location "$LOCATION" \
 
 # --- 3. Public, plaintext, shared-key storage: the headline finding ----------
 say "Storage accounts"
-# MISCONFIG x3: public blob access, TLS 1.0 floor, HTTP allowed. Shared keys stay on.
+# MISCONFIG x2: public blob access, HTTP allowed. Shared keys stay on. (No TLS floor
+# finding here: Azure retired TLS 1.0/1.1 for storage in Feb 2026 and silently
+# upgrades the flag to 1.2 — found on the first live run, see VALIDATION-LOG F22.)
 if ! out="$(az storage account create --name "$ST_PUBLIC" --resource-group "$RG_PROD" \
       --location "$LOCATION" --sku Standard_LRS --kind StorageV2 \
-      --allow-blob-public-access true --min-tls-version TLS1_0 --https-only false \
+      --allow-blob-public-access true --https-only false \
       --tags env=prod owner="$OWNER" purpose=cge-az-capstone-seed 2>&1)"; then
   if printf '%s' "$out" | grep -q RequestDisallowedByPolicy; then
     warn "$ST_PUBLIC: public blob access was REFUSED by your deny-public-blob policy."
     note "That is the control working. Creating it without public access; the TLS and HTTPS findings remain."
     az storage account create --name "$ST_PUBLIC" --resource-group "$RG_PROD" \
       --location "$LOCATION" --sku Standard_LRS --kind StorageV2 \
-      --min-tls-version TLS1_0 --https-only false \
+      --https-only false \
       --tags env=prod owner="$OWNER" purpose=cge-az-capstone-seed >/dev/null \
-      && ok "$ST_PUBLIC (TLS 1.0 + HTTP allowed — deliberate; public blob blocked by policy)"
+      && ok "$ST_PUBLIC (HTTP allowed — deliberate; public blob blocked by policy)"
   else
     warn "$ST_PUBLIC failed: $(printf '%s' "$out" | head -3)"
   fi
 else
-  ok "$ST_PUBLIC (public blob + TLS 1.0 + HTTP allowed — deliberate)"
+  ok "$ST_PUBLIC (public blob + HTTP allowed — deliberate)"
 fi
 
 # MISCONFIG: defaults only, no tags, no diagnostic settings. The foundation's
@@ -245,7 +250,7 @@ cat <<EOF
 
   Deliberate findings you should be able to point at by resource ID:
     $RG_LEGACY      missing env tag
-    $ST_PUBLIC   public blob (unless policy refused it), TLS 1.0, HTTP allowed, shared keys
+    $ST_PUBLIC   public blob (unless policy refused it), HTTP allowed, shared keys
     $ST_LOGS   untagged, no diagnostics (deployIfNotExists should fix this one)
     $KV     purge protection off, public network, no RBAC
     $NSG    22 + 3389 inbound from Internet

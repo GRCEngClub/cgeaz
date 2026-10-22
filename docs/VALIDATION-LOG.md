@@ -224,3 +224,25 @@ architecture doc describes the starter's stage flow, stage contracts, data flow,
 partition-key reasoning, and identity boundaries, and the rubric's dimension 5 now
 points at it as the baseline to extend. Validation: shell syntax and shellcheck only,
 same read-only-subscription caveat as F20.
+
+### F22 — seed-estate.sh, first live run (free account, 2026-10-22)
+
+Run by a learner in the study group (thank you, Ben — six runs, zero errors on the
+sixth, PR #8). Four things broke on a real free account that syntax checks could not
+catch:
+
+1. `az keyvault create --enable-purge-protection false` is rejected by the API
+   (`enablePurgeProtection cannot be set to false`). Flag removed; purge protection is
+   off by default, so the misconfiguration stands.
+2. Free accounts can have **zero F1 App Service quota in eastus** — the same regional
+   pattern as Y1 in F9. `SEED_APP_LOCATION` now overrides the App Service region;
+   `centralus` worked.
+3. A failed F1 create left the plan name reserved in eastus for over an hour, blocking
+   creation elsewhere. The plan name is now region-suffixed.
+4. A re-run errored `vault already exists`; the create is skipped when the vault
+   exists.
+
+Also learned: Azure retired TLS 1.0/1.1 for storage accounts in February 2026, so
+`--min-tls-version TLS1_0` is silently upgraded to 1.2 and there is no storage TLS
+finding to claim. The flag and the claim are gone; HTTP-allowed, public blob, and
+shared keys remain. App Service still accepts a TLS 1.0 floor, so that finding stays.
