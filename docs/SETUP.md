@@ -59,17 +59,20 @@ az account show   # confirm the right subscription
 ```
 
 Fresh subscriptions have almost every resource provider **unregistered**, which produces
-confusing errors deep into the labs. Register the eight the course uses now:
+confusing errors deep into the labs. Register everything the course uses now (the eight
+the pipeline needs plus the three the capstone's seeded estate needs), from your clone
+of the repo (step 3):
 
 ```bash
-for ns in Microsoft.Management Microsoft.OperationalInsights Microsoft.Security \
-          Microsoft.DocumentDB Microsoft.Web Microsoft.Storage Microsoft.Insights \
-          Microsoft.PolicyInsights; do
-  az provider register --namespace $ns
-done
+./labs/00-setup/register-providers.sh
 ```
 
-Registration takes ~2–3 minutes; check with
+The script skips what is already registered and waits until the rest finish, usually
+2–3 minutes. Doing it by hand instead: `az provider register --namespace <ns>` for
+`Microsoft.Management`, `Microsoft.OperationalInsights`, `Microsoft.Security`,
+`Microsoft.DocumentDB`, `Microsoft.Web`, `Microsoft.Storage`, `Microsoft.Insights`,
+`Microsoft.PolicyInsights`, `Microsoft.KeyVault`, `Microsoft.Network`,
+`Microsoft.ManagedIdentity`, then check with
 `az provider list --query "[?registrationState=='Registering'].namespace"` — empty means done.
 
 ## 3. Fork and clone the repo
