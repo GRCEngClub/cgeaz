@@ -195,3 +195,19 @@ runnable `TF_VAR_state_storage_account=stgrctfstateXXXXXXXX` placeholder lines i
 4 and 5 now derive the value from `backend.hcl` (copied verbatim, the placeholder
 produced a cryptic `no such host`). macOS/Homebrew Python needs a venv for the seed
 script (PEP 668 `externally-managed-environment`) — noted in Lab 4.
+
+## Capstone seed script (2026-10-22)
+
+### F20 — the capstone video references `seed-estate.sh`, which never shipped
+
+Found by a learner in the study group (thank you, Ben). The Domain 7 capstone video
+("One subscription is enough") tells you to run `seed-estate.sh` from the repo to
+deploy about a dozen deliberately misconfigured resources; the file was not in the
+repo at launch, and SETUP.md step 2 (provider registration) is unrelated to it.
+**Fix:** `seed-estate.sh` now lives at the repo root next to `self-check.sh`, with a
+`--teardown` mode, and RUBRIC.md has a "Seeding your estate" section.
+**Validation status:** `bash -n` and shellcheck clean, every CLI flag confirmed
+against Azure CLI 2.90 — but the validation subscription's free credit had expired
+and the subscription was read-only on the day, so this script has **not** yet had an
+end-to-end run on a live account. If you are the first to run it, a PR with what
+broke (or a note that nothing did) earns a credit in this log.

@@ -59,6 +59,11 @@ with your own modifications. Rubric and submission checklist: `docs/RUBRIC.md`
 (published with the course). Stage 5 is optional — extra credit if present, zero
 penalty if absent.
 
+The brief describes an estate far bigger than one free sandbox. `./seed-estate.sh`
+closes that gap: it deploys about a dozen cheap resources into your subscription,
+several deliberately misconfigured, so your discovery, assessments, and reports have
+real findings with real resource IDs. `./seed-estate.sh --teardown` removes them.
+
 ---
 
 *Built by the community, for the community · www.grcengclub.com*
