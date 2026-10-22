@@ -26,6 +26,7 @@ set -uo pipefail
 export MSYS_NO_PATHCONV=1 # Git Bash: stop rewriting /subscriptions/... scopes into Windows paths
 
 LOCATION="${SEED_LOCATION:-eastus}"
+APP_LOCATION="${SEED_APP_LOCATION:-$LOCATION}"  # App Service F1 quota is regional; free accounts can have 0 in eastus
 OWNER="${SEED_OWNER:-you@example.com}"
 
 RG_PROD="rg-fafo-prod"
@@ -55,7 +56,7 @@ KV="kv-fafo-${SFX}"
 VNET="vnet-fafo"
 SUBNET="snet-fafo-app"
 NSG="nsg-fafo-open"
-PLAN="plan-fafo-free"
+PLAN="plan-fafo-free-${APP_LOCATION}"
 APP="app-fafo-${SFX}"
 UAMI="id-fafo-batch"
 
@@ -164,11 +165,15 @@ if az keyvault list-deleted --query "[?name=='$KV']" -o tsv | grep -q "$KV"; the
 fi
 # MISCONFIG x3: purge protection off, public network access, legacy access policies
 # instead of RBAC. Nothing is stored in it.
-az keyvault create --name "$KV" --resource-group "$RG_PROD" --location "$LOCATION" \
-  --enable-purge-protection false --retention-days 7 \
-  --public-network-access Enabled --enable-rbac-authorization false \
-  --tags env=prod owner="$OWNER" purpose=cge-az-capstone-seed >/dev/null \
-  && ok "$KV (no purge protection, public network, access policies — deliberate)"
+if az keyvault show --name "$KV" >/dev/null 2>&1; then
+  ok "$KV already exists"
+else
+  az keyvault create --name "$KV" --resource-group "$RG_PROD" --location "$LOCATION" \
+    --retention-days 7 \
+    --public-network-access Enabled --enable-rbac-authorization false \
+    --tags env=prod owner="$OWNER" purpose=cge-az-capstone-seed >/dev/null \
+    && ok "$KV (no purge protection, public network, access policies — deliberate)"
+fi
 
 # --- 7-9. Network with management ports open to the internet -----------------
 say "Network"
@@ -188,7 +193,7 @@ az network vnet create --name "$VNET" --resource-group "$RG_LEGACY" --location "
 
 # --- 10-11. A free web app with transport security turned off ----------------
 say "App Service"
-az appservice plan create --name "$PLAN" --resource-group "$RG_PROD" --location "$LOCATION" \
+az appservice plan create --name "$PLAN" --resource-group "$RG_PROD" --location "$APP_LOCATION" \
   --sku F1 --is-linux --tags env=prod owner="$OWNER" purpose=cge-az-capstone-seed >/dev/null \
   && ok "$PLAN (F1, free)"
 az webapp create --name "$APP" --resource-group "$RG_PROD" --plan "$PLAN" \
