@@ -56,7 +56,8 @@ reality).
 ### 5. Documentation & Control Mapping
 Cold-readable README with deploy order; CONTROLS.md current with the code; blast-radius
 notes on every enforcement policy; architecture doc showing stage flow and identity
-boundaries; the why documented for non-obvious choices.
+boundaries (the starter's is [ARCHITECTURE.md](ARCHITECTURE.md) — extend it, don't
+submit it unchanged); the why documented for non-obvious choices.
 
 ## Auto-fail triggers
 

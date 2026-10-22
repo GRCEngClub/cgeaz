@@ -211,3 +211,16 @@ against Azure CLI 2.90 — but the validation subscription's free credit had exp
 and the subscription was read-only on the day, so this script has **not** yet had an
 end-to-end run on a live account. If you are the first to run it, a PR with what
 broke (or a note that nothing did) earns a credit in this log.
+
+### F21 — two more files the course videos reference that were not in the repo
+
+Found while fixing F20. The Domain 1 setup lesson names
+`labs/00-setup/register-providers.sh` ("the setup script registers all eight up
+front") and the capstone lesson lists `docs/ARCHITECTURE.md` in the expected
+submission layout; neither existed. **Fix:** both now ship. The provider script
+registers the eight pipeline namespaces plus the three the seeded estate uses, skips
+what is already registered, and waits for completion; SETUP.md step 2 calls it. The
+architecture doc describes the starter's stage flow, stage contracts, data flow,
+partition-key reasoning, and identity boundaries, and the rubric's dimension 5 now
+points at it as the baseline to extend. Validation: shell syntax and shellcheck only,
+same read-only-subscription caveat as F20.
