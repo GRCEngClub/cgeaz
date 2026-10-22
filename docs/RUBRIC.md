@@ -82,12 +82,14 @@ not the size of the estate. Run
 
 from the repo root after Lab 6 and before you start building. It deploys about a
 dozen cheap, free-tier-friendly resources into your sandbox — two resource groups
-(one untagged), three storage accounts (one public, plaintext, and TLS 1.0; one
+(one untagged), three storage accounts (one public and plaintext; one
 untagged with no diagnostics; one hardened as the control sample), a Key Vault with
 its guardrails off, an NSG with 22 and 3389 open to the internet, a free-tier web
 app with HTTPS-only off, and a workload identity holding Contributor — so discovery
 finds something, assessments have something to assess, and your reports carry real
-findings. Everything is tagged `purpose=cge-az-capstone-seed`; discover it by tag,
+findings. Free accounts often have zero F1 App Service quota in eastus; if the plan
+create fails on quota, re-run with `SEED_APP_LOCATION=centralus` (or another region).
+Everything is tagged `purpose=cge-az-capstone-seed`; discover it by tag,
 not by name. `./seed-estate.sh --teardown` removes it all once your score is back.
 
 What the grader actually checks is that the pipeline scales by scope, not by size:
